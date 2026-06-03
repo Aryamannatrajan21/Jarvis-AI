@@ -80,7 +80,7 @@ async function startLiveChat() {
   const orchestrator = new Orchestrator({
     provider,
     AgentClass: Agent,
-    defaultModel: 'gpt-4o'
+    defaultModel: process.env.DEFAULT_MODEL || 'gpt-4o'
   });
 
   // Log bus events in real-time to show background actions fluidly

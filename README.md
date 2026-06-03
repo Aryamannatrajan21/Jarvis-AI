@@ -45,6 +45,26 @@ npm install jarvis-ai
 
 ---
 
+## Configuration & API Keys
+
+> [!IMPORTANT]
+> To make Jarvis-AI smart and functional, you need to provide your own API keys. The framework is fully model-agnostic, meaning you can plug in any OpenAI-compatible provider (e.g., OpenAI, NVIDIA NIM, OpenRouter, or local Ollama).
+
+Create a `.env` file at the root of your workspace:
+
+```env
+# Example configuration for OpenAI
+OPENAI_API_KEY=your-openai-api-key
+DEFAULT_MODEL=gpt-4o
+
+# Example configuration for NVIDIA NIM endpoints
+OPENAI_API_KEY=your-nvidia-api-key
+OPENAI_BASE_URL=https://integrate.api.nvidia.com/v1
+DEFAULT_MODEL=meta/llama-3.1-70b-instruct
+```
+
+---
+
 ## Quickstart
 
 Here is how easily you can create cooperative agents with Jarvis-AI:

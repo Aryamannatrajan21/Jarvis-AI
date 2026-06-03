@@ -87,7 +87,7 @@ async function main() {
     name: 'Research Agent',
     instructions: 'You are a research specialist capable of math calculation using your calculator tool.',
     provider,
-    model: 'gpt-4o',
+    model: process.env.DEFAULT_MODEL || 'gpt-4o',
     tools: [calculatorTool]
   });
 
@@ -103,7 +103,7 @@ async function main() {
     name: 'Writer Agent',
     instructions: 'You are a professional report writer.',
     provider,
-    model: 'gpt-4o'
+    model: process.env.DEFAULT_MODEL || 'gpt-4o'
   });
 
   console.log(`\nCreated Second Agent: "${writer.name}" [ID: ${writer.id}]`);

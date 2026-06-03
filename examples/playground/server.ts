@@ -65,7 +65,7 @@ const provider = hasKey ? new OpenAIProvider() : new MockVoiceOrchestrationProvi
 const orchestrator = new Orchestrator({
   provider,
   AgentClass: Agent,
-  defaultModel: 'gpt-4o'
+  defaultModel: process.env.DEFAULT_MODEL || 'gpt-4o'
 });
 
 // Chat API endpoint

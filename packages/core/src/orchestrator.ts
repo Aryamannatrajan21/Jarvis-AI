@@ -16,7 +16,7 @@ export class Orchestrator {
   }) {
     this.AgentClass = options.AgentClass;
     this.provider = options.provider;
-    this.defaultModel = options.defaultModel || 'gpt-4o';
+    this.defaultModel = options.defaultModel || process.env.DEFAULT_MODEL || 'gpt-4o';
 
     // Initialize the primary JARVIS agent
     this.jarvisAgent = new this.AgentClass({
