@@ -500,8 +500,10 @@
 
     // Initialize text-to-speech voicing
     function speakText(text, resumeListening = true) {
-      if (synth.speaking) {
-        synth.cancel();
+      // Force cancel and resume to unfreeze Chrome/Safari speech queue
+      synth.cancel();
+      if (synth.paused) {
+        synth.resume();
       }
       
       isSpeaking = true;
@@ -509,6 +511,9 @@
       statusMessage.textContent = 'JARVIS Speaking...';
 
       const utterance = new SpeechSynthesisUtterance(text);
+      utterance.volume = 1.0;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
       
       // Select a nice male/female natural voice if available
       const voices = synth.getVoices();
@@ -517,12 +522,23 @@
         utterance.voice = preferredVoice;
       }
 
+      console.log('JARVIS Voicing:', text, 'Voice:', utterance.voice ? utterance.voice.name : 'System Default');
+
       utterance.onend = () => {
         isSpeaking = false;
         voiceOrb.className = 'orb listening';
         statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
         if (resumeListening) {
           // Resume recognition loop
+          startListening();
+        }
+      };
+
+      utterance.onerror = (e) => {
+        console.error('Speech synthesis error:', e);
+        isSpeaking = false;
+        voiceOrb.className = 'orb listening';
+        if (resumeListening) {
           startListening();
         }
       };
