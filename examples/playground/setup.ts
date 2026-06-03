@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function ensureApiConfig(): Promise<void> {
-  const envPath = path.join(__dirname, '..', '..', '.env');
+  const envPath = path.join(__dirname, '..', '..', '..', '.env');
   
   // If .env already exists or key is in environment, skip wizard
   if (fs.existsSync(envPath) || process.env.OPENAI_API_KEY) {

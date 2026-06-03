@@ -34,6 +34,7 @@
       justify-content: space-between;
       overflow-x: hidden;
       padding: 2rem;
+      position: relative;
     }
 
     header {
@@ -59,6 +60,29 @@
       margin-top: 0.5rem;
       text-transform: uppercase;
       letter-spacing: 3px;
+    }
+
+    /* Settings Gear Button */
+    .settings-btn {
+      position: absolute;
+      top: 2rem;
+      right: 2rem;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      color: var(--accent-color);
+      padding: 0.8rem;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.2rem;
+      transition: all 0.3s;
+      box-shadow: 0 0 15px rgba(69, 243, 255, 0.2);
+    }
+
+    .settings-btn:hover {
+      background: var(--accent-color);
+      color: var(--bg-color);
+      box-shadow: 0 0 25px var(--accent-color);
+      transform: rotate(45deg);
     }
 
     .container {
@@ -204,6 +228,112 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
+    /* Settings Modal Dialog */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .modal {
+      background: #1f2833;
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      width: 90%;
+      max-width: 500px;
+      padding: 2rem;
+      box-shadow: 0 0 50px rgba(69, 243, 255, 0.25);
+      animation: modalSlide 0.3s ease-out;
+    }
+
+    @keyframes modalSlide {
+      from { transform: translateY(-50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      color: #ffffff;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: color 0.3s;
+    }
+
+    .modal-close:hover {
+      color: var(--accent-color);
+    }
+
+    .form-group {
+      margin-bottom: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .form-group label {
+      font-size: 0.9rem;
+      color: var(--text-color);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-group select,
+    .form-group input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.8rem;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    .form-group select:focus,
+    .form-group input:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 10px rgba(69, 243, 255, 0.2);
+    }
+
+    .btn-save {
+      background: var(--accent-color);
+      color: var(--bg-color);
+      border: none;
+      border-radius: 8px;
+      padding: 0.8rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      width: 100%;
+      margin-top: 1rem;
+    }
+
+    .btn-save:hover {
+      background: #66fcf1;
+      box-shadow: 0 0 20px var(--accent-color);
+    }
+
     footer {
       font-size: 0.85rem;
       color: #454545;
@@ -214,6 +344,8 @@
   </style>
 </head>
 <body>
+
+  <button class="settings-btn" id="openSettingsBtn">⚙️</button>
 
   <header>
     <h1>JARVIS-AI</h1>
@@ -239,6 +371,37 @@
 
   </div>
 
+  <!-- Settings Modal -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>API Configuration</h2>
+        <button class="modal-close" id="closeSettingsBtn">&times;</button>
+      </div>
+      <div class="form-group">
+        <label for="providerSelect">Provider</label>
+        <select id="providerSelect">
+          <option value="openai">OpenAI</option>
+          <option value="nvidia">NVIDIA NIM</option>
+          <option value="custom">Custom Endpoint</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="apiKeyInput">API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="Enter your provider API Key">
+      </div>
+      <div class="form-group" id="baseUrlGroup" style="display: none;">
+        <label for="baseUrlInput">Base URL</label>
+        <input type="text" id="baseUrlInput" placeholder="e.g. http://localhost:11434/v1">
+      </div>
+      <div class="form-group">
+        <label for="modelInput">Model Name</label>
+        <input type="text" id="modelInput" placeholder="e.g. gpt-4o or meta/llama-3.1-70b-instruct">
+      </div>
+      <button class="btn-save" id="saveSettingsBtn">Save Configuration</button>
+    </div>
+  </div>
+
   <footer>
     Model Agnostic Cooperative Agent Framework
   </footer>
@@ -247,6 +410,15 @@
     const voiceOrb = document.getElementById('voiceOrb');
     const statusMessage = document.getElementById('statusMessage');
     const consolePanel = document.getElementById('consolePanel');
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const providerSelect = document.getElementById('providerSelect');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const baseUrlInput = document.getElementById('baseUrlInput');
+    const baseUrlGroup = document.getElementById('baseUrlGroup');
+    const modelInput = document.getElementById('modelInput');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 
     // Web Speech API interfaces
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -254,6 +426,59 @@
     let recognition;
     let isSpeaking = false;
     let isActiveSession = false;
+
+    // Load saved configuration from localStorage
+    function loadSavedConfig() {
+      const config = JSON.parse(localStorage.getItem('jarvis_config') || '{}');
+      if (config.provider) {
+        providerSelect.value = config.provider;
+        toggleBaseUrlField(config.provider);
+      }
+      if (config.apiKey) apiKeyInput.value = config.apiKey;
+      if (config.baseUrl) baseUrlInput.value = config.baseUrl;
+      if (config.model) modelInput.value = config.model;
+    }
+
+    function toggleBaseUrlField(provider) {
+      if (provider === 'custom') {
+        baseUrlGroup.style.display = 'flex';
+      } else {
+        baseUrlGroup.style.display = 'none';
+      }
+    }
+
+    providerSelect.addEventListener('change', (e) => {
+      toggleBaseUrlField(e.target.value);
+      if (e.target.value === 'nvidia') {
+        modelInput.placeholder = 'e.g. meta/llama-3.1-70b-instruct';
+        if (!modelInput.value) modelInput.value = 'meta/llama-3.1-70b-instruct';
+      } else if (e.target.value === 'openai') {
+        modelInput.placeholder = 'e.g. gpt-4o';
+        if (!modelInput.value || modelInput.value.includes('llama')) modelInput.value = 'gpt-4o';
+      }
+    });
+
+    openSettingsBtn.addEventListener('click', () => {
+      loadSavedConfig();
+      settingsModal.style.display = 'flex';
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal.style.display = 'none';
+    });
+
+    saveSettingsBtn.addEventListener('click', () => {
+      const config = {
+        provider: providerSelect.value,
+        apiKey: apiKeyInput.value.trim(),
+        baseUrl: providerSelect.value === 'nvidia' ? 'https://integrate.api.nvidia.com/v1' : baseUrlInput.value.trim(),
+        model: modelInput.value.trim()
+      };
+      
+      localStorage.setItem('jarvis_config', JSON.stringify(config));
+      settingsModal.style.display = 'none';
+      addMessage('System', 'Configuration saved. The model provider has been updated.');
+    });
 
     function addMessage(sender, content) {
       const msgDiv = document.createElement('div');
@@ -333,10 +558,15 @@
 
         try {
           statusMessage.textContent = 'Thinking...';
+          const savedConfig = JSON.parse(localStorage.getItem('jarvis_config') || '{}');
+          
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: transcript })
+            body: JSON.stringify({ 
+              message: transcript,
+              config: savedConfig.apiKey ? savedConfig : null
+            })
           });
 
           const data = await res.json();
@@ -383,6 +613,7 @@
     });
 
     // Boot
+    loadSavedConfig();
     setupRecognition();
     setTimeout(startListening, 1000);
   </script>

@@ -74,12 +74,57 @@ async function startServer() {
 
   // Chat API endpoint
   app.post('/api/chat', async (req, res) => {
-    const { message } = req.body;
+    const { message, config } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Message payload is missing.' });
     }
 
     try {
+      // Dynamic client-side config injection
+      if (config && config.apiKey) {
+        const clientProvider = new OpenAIProvider({
+          apiKey: config.apiKey,
+          baseURL: config.baseUrl || undefined
+        });
+
+        const tempOrchestrator = new Orchestrator({
+          provider: clientProvider,
+          AgentClass: Agent,
+          defaultModel: config.model || process.env.DEFAULT_MODEL || 'gpt-4o'
+        });
+
+        // Copy over registered subagents from the global orchestrator registry
+        for (const agent of orchestrator.listAgents()) {
+          if (agent.id !== 'jarvis-meta-agent') {
+            tempOrchestrator.registerAgent(agent);
+          }
+        }
+
+        // Wake up temp orchestrator session state to match global session state
+        if (orchestrator.isSessionOpen()) {
+          await tempOrchestrator.handleInput("Hey JARVIS");
+        }
+
+        const result = await tempOrchestrator.handleInput(message);
+
+        // Sync back session active states
+        if (!result.sessionActive) {
+          orchestrator.closeSession();
+        } else {
+          // Sync any newly created child agents back to global registry
+          for (const agent of tempOrchestrator.listAgents()) {
+            if (!orchestrator.findAgent(agent.id)) {
+              orchestrator.registerAgent(agent);
+            }
+          }
+          if (!orchestrator.isSessionOpen()) {
+            await orchestrator.handleInput("Hey JARVIS");
+          }
+        }
+
+        return res.json(result);
+      }
+
       const result = await orchestrator.handleInput(message);
       res.json(result);
     } catch (error: any) {
