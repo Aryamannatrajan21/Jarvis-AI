@@ -108,7 +108,7 @@ You have tools to:
    */
   public async handleInput(input: string): Promise<{ response: string; sessionActive: boolean }> {
     const trimmedInput = input.trim();
-    const wakeWordPattern = /\bhey\s+jarvis\b/i;
+    const wakeWordPattern = /\b(hey\s+)?jarvis\b/i;
 
     // Wake word detection
     const hasWakeWord = wakeWordPattern.test(trimmedInput);

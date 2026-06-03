@@ -591,8 +591,11 @@
       };
 
       recognition.onerror = (e) => {
-        if (e.error !== 'no-speech') {
-          console.error('Speech error:', e.error);
+        console.error('Speech error:', e.error);
+        if (e.error === 'not-allowed') {
+          addMessage('System', 'Microphone Access Denied. Please enable microphone permissions in your browser address bar and click the orb to restart.');
+        } else if (e.error !== 'no-speech') {
+          addMessage('System', 'Speech Recognition Error: ' + e.error);
         }
       };
 
