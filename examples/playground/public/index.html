@@ -499,7 +499,7 @@
     }
 
     // Initialize text-to-speech voicing
-    function speakText(text) {
+    function speakText(text, resumeListening = true) {
       if (synth.speaking) {
         synth.cancel();
       }
@@ -521,8 +521,10 @@
         isSpeaking = false;
         voiceOrb.className = 'orb listening';
         statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
-        // Resume recognition loop
-        startListening();
+        if (resumeListening) {
+          // Resume recognition loop
+          startListening();
+        }
       };
 
       synth.speak(utterance);
@@ -558,6 +560,8 @@
 
         try {
           statusMessage.textContent = 'Thinking...';
+          speakText('Thinking...', false);
+
           const savedConfig = JSON.parse(localStorage.getItem('jarvis_config') || '{}');
           
           const res = await fetch('/api/chat', {
@@ -572,8 +576,13 @@
           const data = await res.json();
           isActiveSession = data.sessionActive;
 
+          // Stop speech synthesis if it's currently speaking "Thinking..."
+          if (synth.speaking) {
+            synth.cancel();
+          }
+
           addMessage('JARVIS', data.response);
-          speakText(data.response);
+          speakText(data.response, true);
         } catch (err) {
           console.error(err);
           addMessage('System', 'Failed to connect to orchestrator backend.');
