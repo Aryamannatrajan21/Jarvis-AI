@@ -2,6 +2,7 @@ import readline from 'readline';
 import { ModelProvider, ToolDefinition, Orchestrator, globalBus, MessageEnvelope } from '@jarvis-ai/core';
 import { OpenAIProvider } from '@jarvis-ai/openai';
 import { Agent } from '@jarvis-ai/agent';
+import { ensureApiConfig } from './setup.js';
 
 // Mock Provider for local out-of-the-box testing of JARVIS orchestrations
 class MockOrchestrationProvider implements ModelProvider {
@@ -63,6 +64,7 @@ class MockOrchestrationProvider implements ModelProvider {
 }
 
 async function startLiveChat() {
+  await ensureApiConfig();
   console.clear();
   console.log('====================================================');
   console.log('           JARVIS-AI LIVE CONVERSATIONAL LOOP       ');

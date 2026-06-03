@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { ModelProvider, ToolDefinition, Orchestrator } from '@jarvis-ai/core';
 import { OpenAIProvider } from '@jarvis-ai/openai';
 import { Agent } from '@jarvis-ai/agent';
+import { ensureApiConfig } from './setup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,35 +59,41 @@ app.use(express.json());
 // Serve the static web interface files
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-const hasKey = !!process.env.OPENAI_API_KEY;
-const provider = hasKey ? new OpenAIProvider() : new MockVoiceOrchestrationProvider();
+async function startServer() {
+  await ensureApiConfig();
 
-// Initialize the global orchestrator
-const orchestrator = new Orchestrator({
-  provider,
-  AgentClass: Agent,
-  defaultModel: process.env.DEFAULT_MODEL || 'gpt-4o'
-});
+  const hasKey = !!process.env.OPENAI_API_KEY;
+  const provider = hasKey ? new OpenAIProvider() : new MockVoiceOrchestrationProvider();
 
-// Chat API endpoint
-app.post('/api/chat', async (req, res) => {
-  const { message } = req.body;
-  if (!message) {
-    return res.status(400).json({ error: 'Message payload is missing.' });
-  }
+  // Initialize the global orchestrator
+  const orchestrator = new Orchestrator({
+    provider,
+    AgentClass: Agent,
+    defaultModel: process.env.DEFAULT_MODEL || 'gpt-4o'
+  });
 
-  try {
-    const result = await orchestrator.handleInput(message);
-    res.json(result);
-  } catch (error: any) {
-    console.error('Error handling orchestrator input:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+  // Chat API endpoint
+  app.post('/api/chat', async (req, res) => {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: 'Message payload is missing.' });
+    }
 
-app.listen(PORT, () => {
-  console.log(`\n====================================================`);
-  console.log(`  JARVIS Voice Live Chat server running at:`);
-  console.log(`  👉 http://localhost:${PORT}`);
-  console.log(`====================================================\n`);
-});
+    try {
+      const result = await orchestrator.handleInput(message);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error handling orchestrator input:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.listen(PORT, () => {
+    console.log(`\n====================================================`);
+    console.log(`  JARVIS Voice Live Chat server running at:`);
+    console.log(`  👉 http://localhost:${PORT}`);
+    console.log(`====================================================\n`);
+  });
+}
+
+startServer().catch(console.error);
