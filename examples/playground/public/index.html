@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS-AI Voice Live Chat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0b0c10;
+      --accent-color: #45f3ff;
+      --accent-hover: #1f8a70;
+      --glow-color: rgba(69, 243, 255, 0.4);
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-color: #c5c6c7;
+      --heading-color: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: radial-gradient(circle at center, #1f2833 0%, var(--bg-color) 70%);
+      color: var(--text-color);
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      overflow-x: hidden;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    header h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--heading-color);
+      background: linear-gradient(45deg, #ffffff, var(--accent-color));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 30px var(--glow-color);
+    }
+
+    header p {
+      font-size: 1rem;
+      color: #66fcf1;
+      margin-top: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    /* Voice Orb button */
+    .orb-container {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 1.5rem 0;
+    }
+
+    .orb {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-color) 0%, #008c9e 100%);
+      box-shadow: 0 0 50px var(--accent-color), inset 0 0 20px #ffffff;
+      cursor: pointer;
+      transition: all 0.5s ease;
+      position: relative;
+      z-index: 10;
+    }
+
+    .orb-pulse {
+      position: absolute;
+      width: 170px;
+      height: 170px;
+      border-radius: 50%;
+      border: 2px solid var(--accent-color);
+      opacity: 0.5;
+      animation: pulse 2s infinite ease-out;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .orb-pulse-2 {
+      position: absolute;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      border: 1px dashed var(--accent-color);
+      opacity: 0.3;
+      animation: pulse 3s infinite linear;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    /* States */
+    .orb.listening {
+      background: radial-gradient(circle, #ff4545 0%, #8b0000 100%);
+      box-shadow: 0 0 60px #ff4545, inset 0 0 25px #ffffff;
+      transform: scale(1.1);
+    }
+    .orb.listening + .orb-pulse {
+      border-color: #ff4545;
+    }
+
+    .orb.speaking {
+      background: radial-gradient(circle, #45ff62 0%, #008b1a 100%);
+      box-shadow: 0 0 60px #45ff62, inset 0 0 25px #ffffff;
+      animation: bounce 0.6s infinite alternate;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.8); opacity: 0.8; }
+      100% { transform: scale(1.3); opacity: 0; }
+    }
+
+    @keyframes bounce {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.08); }
+    }
+
+    .status-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--accent-color);
+      letter-spacing: 1px;
+      transition: color 0.3s;
+    }
+
+    /* Output Console Layout */
+    .console-panel {
+      width: 100%;
+      height: 280px;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow-y: auto;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .message {
+      margin-bottom: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    .message.user .sender {
+      color: #66fcf1;
+    }
+    .message.jarvis .sender {
+      color: var(--accent-color);
+      font-weight: 600;
+    }
+    .message.system .sender {
+      color: #ff4545;
+    }
+
+    .sender {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #888888;
+    }
+
+    .content {
+      font-size: 1.05rem;
+      line-height: 1.5;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    footer {
+      font-size: 0.85rem;
+      color: #454545;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>JARVIS-AI</h1>
+    <p>Voice Command Interface</p>
+  </header>
+
+  <div class="container">
+    
+    <div class="orb-container">
+      <div class="orb" id="voiceOrb"></div>
+      <div class="orb-pulse"></div>
+      <div class="orb-pulse-2"></div>
+    </div>
+
+    <div class="status-text" id="statusMessage">Listening for "Hey JARVIS"...</div>
+
+    <div class="console-panel" id="consolePanel">
+      <div class="message system">
+        <span class="sender">System</span>
+        <span class="content">Voice system initialized. Tap the orb if recognition pauses. Say "Hey JARVIS" to wake the system.</span>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Model Agnostic Cooperative Agent Framework
+  </footer>
+
+  <script>
+    const voiceOrb = document.getElementById('voiceOrb');
+    const statusMessage = document.getElementById('statusMessage');
+    const consolePanel = document.getElementById('consolePanel');
+
+    // Web Speech API interfaces
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const synth = window.speechSynthesis;
+    let recognition;
+    let isSpeaking = false;
+    let isActiveSession = false;
+
+    function addMessage(sender, content) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `message ${sender.toLowerCase() === 'you' ? 'user' : 'jarvis'}`;
+      
+      const senderSpan = document.createElement('span');
+      senderSpan.className = 'sender';
+      senderSpan.textContent = sender;
+
+      const contentSpan = document.createElement('span');
+      contentSpan.className = 'content';
+      contentSpan.textContent = content;
+
+      msgDiv.appendChild(senderSpan);
+      msgDiv.appendChild(contentSpan);
+      consolePanel.appendChild(msgDiv);
+      consolePanel.scrollTop = consolePanel.scrollHeight;
+    }
+
+    // Initialize text-to-speech voicing
+    function speakText(text) {
+      if (synth.speaking) {
+        synth.cancel();
+      }
+      
+      isSpeaking = true;
+      voiceOrb.className = 'orb speaking';
+      statusMessage.textContent = 'JARVIS Speaking...';
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Select a nice male/female natural voice if available
+      const voices = synth.getVoices();
+      const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Daniel'));
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+
+      utterance.onend = () => {
+        isSpeaking = false;
+        voiceOrb.className = 'orb listening';
+        statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
+        // Resume recognition loop
+        startListening();
+      };
+
+      synth.speak(utterance);
+    }
+
+    // Initialize speech recognition
+    function setupRecognition() {
+      if (!SpeechRecognition) {
+        statusMessage.textContent = 'Speech recognition not supported in this browser.';
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        if (!isSpeaking) {
+          voiceOrb.className = 'orb listening';
+          statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
+        }
+      };
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript.trim();
+        if (!transcript) return;
+
+        addMessage('You', transcript);
+
+        // Pause speech recognition while sending request and voicing output
+        recognition.stop();
+
+        try {
+          statusMessage.textContent = 'Thinking...';
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: transcript })
+          });
+
+          const data = await res.json();
+          isActiveSession = data.sessionActive;
+
+          addMessage('JARVIS', data.response);
+          speakText(data.response);
+        } catch (err) {
+          console.error(err);
+          addMessage('System', 'Failed to connect to orchestrator backend.');
+          speakText('I encountered a connection error.');
+        }
+      };
+
+      recognition.onerror = (e) => {
+        if (e.error !== 'no-speech') {
+          console.error('Speech error:', e.error);
+        }
+      };
+
+      recognition.onend = () => {
+        // Continuous auto-restart loop if not speaking
+        if (!isSpeaking) {
+          startListening();
+        }
+      };
+    }
+
+    function startListening() {
+      if (recognition) {
+        try {
+          recognition.start();
+        } catch (e) {
+          // Already running
+        }
+      }
+    }
+
+    voiceOrb.addEventListener('click', () => {
+      isActiveSession = !isActiveSession;
+      if (synth.speaking) synth.cancel();
+      addMessage('System', isActiveSession ? 'Session activated manually.' : 'Session placed in standby.');
+      startListening();
+    });
+
+    // Boot
+    setupRecognition();
+    setTimeout(startListening, 1000);
+  </script>
+</body>
+</html>
