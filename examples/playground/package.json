@@ -1,0 +1,21 @@
+{
+  "name": "playground",
+  "version": "0.1.0-alpha",
+  "private": true,
+  "description": "Playground example showcasing agent creation, message passing, dynamic spawning, and tool calling.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "@jarvis-ai/core": "*",
+    "@jarvis-ai/tools": "*",
+    "@jarvis-ai/openai": "*",
+    "@jarvis-ai/agent": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

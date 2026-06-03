@@ -1,0 +1,23 @@
+{
+  "name": "jarvis-ai",
+  "private": true,
+  "version": "0.1.0-alpha",
+  "description": "An open-source framework for building model-agnostic collaborative AI agents.",
+  "workspaces": [
+    "packages/*",
+    "providers/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev": "turbo run dev",
+    "start:playground": "npm run build && node examples/playground/dist/index.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "turbo": "^1.12.4",
+    "tsx": "^4.7.1"
+  }
+}
