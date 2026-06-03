@@ -98,6 +98,29 @@ const report = await researcher.ask(writer, `Write a summary report of: ${respon
 console.log(report);
 ```
 
+### Interactive Orchestrator (Live Chat)
+You can instantiate the global `Orchestrator` and process continuous natural language conversations. It handles wake word detection ("Hey JARVIS"), registers spawned agents, and performs tool orchestration:
+
+```typescript
+import { Orchestrator } from '@jarvis-ai/core';
+import { Agent } from '@jarvis-ai/agent';
+import { OpenAIProvider } from '@jarvis-ai/openai';
+
+const orchestrator = new Orchestrator({
+  provider: new OpenAIProvider(),
+  AgentClass: Agent
+});
+
+// Standby mode by default. Triggers active session when "Hey JARVIS" is detected.
+const { response, sessionActive } = await orchestrator.handleInput("Hey JARVIS, create an agent named Researcher");
+console.log(response); // "I will create a new specialized agent named..."
+```
+
+To run the live chat terminal demo:
+```bash
+npm run start:chat
+```
+
 ---
 
 ## Development Workspace Setup

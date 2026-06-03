@@ -13,7 +13,8 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "dev": "turbo run dev",
-    "start:playground": "npm run build && node examples/playground/dist/index.js"
+    "start:playground": "npm run build && node examples/playground/dist/index.js",
+    "start:chat": "npm run build && node examples/playground/dist/liveChat.js"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

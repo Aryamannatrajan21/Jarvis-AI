@@ -68,3 +68,14 @@ export interface AgentConfig {
   model: string;
   tools?: ToolDefinition[];
 }
+
+export interface AgentInterface {
+  id: string;
+  name: string;
+  instructions: string;
+  state: AgentState;
+  run: (query: string, context?: any) => Promise<string>;
+  destroy: () => void;
+  spawn: (config: any) => AgentInterface;
+}
+
