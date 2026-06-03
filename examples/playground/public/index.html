@@ -183,13 +183,51 @@
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--border-color);
-      border-radius: 20px;
+      border-radius: 20px 20px 0 0;
       padding: 1.5rem;
       display: flex;
       flex-direction: column;
       gap: 1rem;
       overflow-y: auto;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Input Bar */
+    .input-bar {
+      width: 100%;
+      display: flex;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-color);
+      border-top: none;
+      border-radius: 0 0 20px 20px;
+      overflow: hidden;
+    }
+
+    .input-bar input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      padding: 1rem 1.5rem;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .input-bar button {
+      background: var(--accent-color);
+      color: var(--bg-color);
+      border: none;
+      padding: 0 1.5rem;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .input-bar button:hover {
+      background: #66fcf1;
     }
 
     .message {
@@ -565,45 +603,75 @@
         }
       };
 
+    async function processMessage(text) {
+      if (!text) return;
+      
+      // Pause speech recognition while sending request and voicing output
+      if (recognition) {
+        try {
+          recognition.stop();
+        } catch (e) {
+          // Already stopped
+        }
+      }
+
+      try {
+        statusMessage.textContent = 'Thinking...';
+        speakText('Thinking...', false);
+
+        const savedConfig = JSON.parse(localStorage.getItem('jarvis_config') || '{}');
+        
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            message: text,
+            config: savedConfig.apiKey ? savedConfig : null
+          })
+        });
+
+        const data = await res.json();
+        isActiveSession = data.sessionActive;
+
+        // Stop speech synthesis if it's currently speaking "Thinking..."
+        if (synth.speaking) {
+          synth.cancel();
+        }
+
+        addMessage('JARVIS', data.response);
+        speakText(data.response, true);
+      } catch (err) {
+        console.error(err);
+        addMessage('System', 'Failed to connect to orchestrator backend.');
+        speakText('I encountered a connection error.', true);
+      }
+    }
+
+    // Initialize speech recognition
+    function setupRecognition() {
+      if (!SpeechRecognition) {
+        statusMessage.textContent = 'Speech recognition not supported in this browser.';
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        if (!isSpeaking) {
+          voiceOrb.className = 'orb listening';
+          statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
+        }
+      };
+
       recognition.onresult = async (event) => {
         const transcript = event.results[0][0].transcript.trim();
         if (!transcript) return;
 
         addMessage('You', transcript);
-
-        // Pause speech recognition while sending request and voicing output
-        recognition.stop();
-
-        try {
-          statusMessage.textContent = 'Thinking...';
-          speakText('Thinking...', false);
-
-          const savedConfig = JSON.parse(localStorage.getItem('jarvis_config') || '{}');
-          
-          const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              message: transcript,
-              config: savedConfig.apiKey ? savedConfig : null
-            })
-          });
-
-          const data = await res.json();
-          isActiveSession = data.sessionActive;
-
-          // Stop speech synthesis if it's currently speaking "Thinking..."
-          if (synth.speaking) {
-            synth.cancel();
-          }
-
-          addMessage('JARVIS', data.response);
-          speakText(data.response, true);
-        } catch (err) {
-          console.error(err);
-          addMessage('System', 'Failed to connect to orchestrator backend.');
-          speakText('I encountered a connection error.');
-        }
+        await processMessage(transcript);
       };
 
       recognition.onerror = (e) => {
@@ -632,6 +700,25 @@
         }
       }
     }
+
+    // Text Input Handlers
+    const textInput = document.getElementById('textInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    async function handleTextSend() {
+      const text = textInput.value.trim();
+      if (!text) return;
+      textInput.value = '';
+      addMessage('You', text);
+      await processMessage(text);
+    }
+
+    sendBtn.addEventListener('click', handleTextSend);
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        handleTextSend();
+      }
+    });
 
     voiceOrb.addEventListener('click', () => {
       isActiveSession = !isActiveSession;
