@@ -33,13 +33,19 @@ class MockVoiceOrchestrationProvider implements ModelProvider {
       };
     }
 
-    if (/ask/i.test(lastMessage) || /delegate/i.test(lastMessage)) {
+    if (lastMessage.includes('quantum computers')) {
       return {
-        content: 'Task received. I am delegating the action to the appropriate agent now.',
+        content: 'Quantum computers process information using qubits, allowing them to solve certain tasks exponentially faster than classical computers.'
+      };
+    }
+
+    if (/ask/i.test(lastMessage) || /delegate/i.test(lastMessage) || /research/i.test(lastMessage)) {
+      return {
+        content: 'Task received. I am delegating the action to the Researcher agent now.',
         toolCalls: [{
           id: 'call-delegate',
           name: 'delegateTask',
-          arguments: JSON.stringify({ agentIdentifier: 'helper', task: lastMessage })
+          arguments: JSON.stringify({ agentIdentifier: 'Researcher', task: lastMessage })
         }]
       };
     }

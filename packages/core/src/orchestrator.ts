@@ -41,6 +41,10 @@ You have tools to:
     });
 
     this.registerAgent(this.jarvisAgent);
+
+    // Pre-register default agents for out-of-the-box delegation and collaboration
+    this.createAgent('Researcher', 'You are a research specialist.');
+    this.createAgent('Writer', 'You are a professional report writer.');
   }
 
   /**

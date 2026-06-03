@@ -27,14 +27,19 @@ class MockOrchestrationProvider implements ModelProvider {
       };
     }
 
-    if (/ask/i.test(lastMessage) || /delegate/i.test(lastMessage) || /tell/i.test(lastMessage)) {
-      // Find what agent they are talking about
+    if (lastMessage.includes('quantum computers')) {
       return {
-        content: 'Delegating the requested task to the appropriate agent.',
+        content: 'Quantum computers use qubits to compute complex algorithms. Researcher finished.'
+      };
+    }
+
+    if (/ask/i.test(lastMessage) || /delegate/i.test(lastMessage) || /tell/i.test(lastMessage) || /research/i.test(lastMessage)) {
+      return {
+        content: 'Delegating the requested task to the Researcher agent.',
         toolCalls: [{
           id: 'call-delegate',
           name: 'delegateTask',
-          arguments: JSON.stringify({ agentIdentifier: 'helper', task: lastMessage })
+          arguments: JSON.stringify({ agentIdentifier: 'Researcher', task: lastMessage })
         }]
       };
     }
