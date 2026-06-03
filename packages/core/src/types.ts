@@ -40,10 +40,25 @@ export interface ToolDefinition<TInput = any, TOutput = any> {
   execute: (args: TInput, context: ExecutionContext) => Promise<TOutput>;
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  name?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }>;
+  tool_call_id?: string;
+}
+
 export interface ModelProvider {
   id: string;
   generateResponse: (
-    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    messages: ChatMessage[],
     tools?: ToolDefinition[],
     options?: Record<string, any>
   ) => Promise<{

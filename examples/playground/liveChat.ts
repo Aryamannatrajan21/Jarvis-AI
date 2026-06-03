@@ -1,18 +1,28 @@
 import readline from 'readline';
-import { ModelProvider, ToolDefinition, Orchestrator, globalBus, MessageEnvelope } from '@jarvis-ai/core';
+import { ModelProvider, ToolDefinition, Orchestrator, globalBus, MessageEnvelope, ChatMessage } from '@jarvis-ai/core';
 import { OpenAIProvider } from '@jarvis-ai/openai';
 import { Agent } from '@jarvis-ai/agent';
 import { ensureApiConfig } from './setup.js';
+import ora from 'ora';
 
 // Mock Provider for local out-of-the-box testing of JARVIS orchestrations
 class MockOrchestrationProvider implements ModelProvider {
   id = 'mock';
   async generateResponse(
-    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    messages: ChatMessage[],
     tools?: ToolDefinition[]
   ) {
-    const lastMessage = messages[messages.length - 1].content;
+    const lastMsgObj = messages[messages.length - 1];
     
+    // Break infinite loop when tool outputs are fed back to the Mock Provider
+    if (lastMsgObj.role === 'tool') {
+      return {
+        content: `Task completed successfully: ${lastMsgObj.content}`
+      };
+    }
+
+    const lastMessage = lastMsgObj.content || '';
+
     // Simulate smart parsing for dynamic creation, delegation, and collaboration
     if (/create/i.test(lastMessage) && /agent/i.test(lastMessage)) {
       const matchName = lastMessage.match(/named\s+([\w\s]+?)(?:\s+that|\s+with|\s*$)/i);
@@ -90,13 +100,20 @@ async function startLiveChat() {
     defaultModel: process.env.DEFAULT_MODEL || 'gpt-4o'
   });
 
-  // Log bus events in real-time to show background actions fluidly
+  // We'll use a global spinner reference to update the UI cleanly
+  let spinner: any = null;
+
   globalBus.subscribe('agent.tool.start', (envelope: MessageEnvelope) => {
-    console.log(`\n\x1b[36m[Event: Tool Triggered]\x1b[0m ${envelope.sender.role} called tool: ${JSON.stringify(envelope.payload.toolCalls[0].name)}`);
+    if (spinner) {
+      const toolName = envelope.payload.toolCalls[0].name;
+      spinner.text = `Agent ${envelope.sender.role} is using tool: ${toolName}...`;
+    }
   });
 
   globalBus.subscribe('agent.tool.end', (envelope: MessageEnvelope) => {
-    console.log(`\x1b[32m[Event: Tool Finished]\x1b[0m ${envelope.sender.role} tool output: ${JSON.stringify(envelope.payload.output).substring(0, 80)}...`);
+    if (spinner) {
+      spinner.text = `Agent ${envelope.sender.role} finished tool execution. Analyzing results...`;
+    }
   });
 
   const rl = readline.createInterface({
@@ -115,16 +132,19 @@ async function startLiveChat() {
         return;
       }
 
-      console.log('\x1b[2mProcessing...\x1b[0m');
+      spinner = ora('JARVIS is thinking...').start();
       
       try {
         const { response, sessionActive } = await orchestrator.handleInput(userInput);
         
+        spinner.stop();
         console.log(`\n\x1b[1mJARVIS:\x1b[0m ${response}\n`);
       } catch (err: any) {
-        console.log(`\n\x1b[31mError:\x1b[0m ${err.message}\n`);
+        spinner.fail(`Error: ${err.message}`);
+        console.log(`\n`);
       }
       
+      spinner = null;
       promptUser();
     });
   };

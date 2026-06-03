@@ -10,16 +10,17 @@
     "start": "tsc && node dist/index.js"
   },
   "dependencies": {
-    "@jarvis-ai/core": "*",
-    "@jarvis-ai/tools": "*",
-    "@jarvis-ai/openai": "*",
     "@jarvis-ai/agent": "*",
+    "@jarvis-ai/core": "*",
+    "@jarvis-ai/openai": "*",
+    "@jarvis-ai/tools": "*",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "ora": "^9.4.0"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
+    "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17"
+    "typescript": "^5.3.3"
   }
 }

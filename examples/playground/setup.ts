@@ -6,9 +6,46 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+function findEnvPath(): string {
+  const paths = [
+    path.join(process.cwd(), '.env'),
+    path.join(__dirname, '..', '..', '.env'),
+    path.join(__dirname, '..', '..', '..', '.env')
+  ];
+  for (const p of paths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return paths[paths.length - 1]; // Fallback
+}
+
+export function loadEnv(): void {
+  const envPath = findEnvPath();
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf-8');
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const match = line.match(/^\s*([\w.\-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let value = match[2] || '';
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
+        if (!process.env[key]) {
+          process.env[key] = value.trim();
+        }
+      }
+    }
+  }
+}
+
 export async function ensureApiConfig(): Promise<void> {
-  const envPath = path.join(__dirname, '..', '..', '..', '.env');
+  const envPath = findEnvPath();
   
+  loadEnv();
+
   // If .env already exists or key is in environment, skip wizard
   if (fs.existsSync(envPath) || process.env.OPENAI_API_KEY) {
     return;
@@ -42,7 +79,7 @@ export async function ensureApiConfig(): Promise<void> {
     if (choice === '2') {
       apiKey = await question('Enter your NVIDIA API Key: ');
       baseUrl = 'https://integrate.api.nvidia.com/v1';
-      defaultModel = 'meta/llama-3.1-70b-instruct';
+      defaultModel = 'meta/llama-3.1-8b-instruct';
     } else if (choice === '3') {
       apiKey = await question('Enter your API Key: ');
       baseUrl = await question('Enter Endpoint Base URL (e.g., http://localhost:11434/v1): ');

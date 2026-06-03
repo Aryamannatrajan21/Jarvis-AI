@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { ModelProvider, ToolDefinition, Orchestrator } from '@jarvis-ai/core';
+import { ModelProvider, ToolDefinition, Orchestrator, ChatMessage } from '@jarvis-ai/core';
 import { OpenAIProvider } from '@jarvis-ai/openai';
 import { Agent } from '@jarvis-ai/agent';
 import { ensureApiConfig } from './setup.js';
@@ -14,11 +14,19 @@ const __dirname = path.dirname(__filename);
 class MockVoiceOrchestrationProvider implements ModelProvider {
   id = 'mock';
   async generateResponse(
-    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    messages: ChatMessage[],
     tools?: ToolDefinition[]
   ) {
-    const lastMessage = messages[messages.length - 1].content;
+    const lastMsgObj = messages[messages.length - 1];
+    const lastMessage = lastMsgObj.content || '';
     console.log(`[Voice Server Mock LLM Input]: "${lastMessage}"`);
+
+    // Break infinite loop when tool outputs are fed back to the Mock Provider
+    if (lastMsgObj.role === 'tool') {
+      return {
+        content: `I have successfully completed the agent operation: ${lastMessage}`
+      };
+    }
 
     if (/create/i.test(lastMessage) && /agent/i.test(lastMessage)) {
       const matchName = lastMessage.match(/named\s+([\w\s]+?)(?:\s+that|\s+with|\s*$)/i);
@@ -87,48 +95,46 @@ async function startServer() {
 
     try {
       // Dynamic client-side config injection
-      if (config && config.apiKey) {
-        const clientProvider = new OpenAIProvider({
-          apiKey: config.apiKey,
-          baseURL: config.baseUrl || undefined
+      if (config) {
+        let newBaseUrl = config.baseUrl || undefined;
+        let newApiKey = config.apiKey || undefined;
+        let newModel = config.model || process.env.DEFAULT_MODEL || 'gpt-4o';
+        
+        // Prevent mismatch between UI provider selection and .env fallback
+        if (!newBaseUrl && config.provider) {
+          if (config.provider === 'openai') newBaseUrl = 'https://api.openai.com/v1';
+          if (config.provider === 'ollama') newBaseUrl = 'http://localhost:11434/v1';
+          if (config.provider === 'nvidia') newBaseUrl = 'https://integrate.api.nvidia.com/v1';
+        }
+
+        // Final safety net: If we ended up with NVIDIA NIM (either explicitly or via fallback), 
+        // ensure the model is actually a valid NVIDIA NIM model, otherwise it throws 404.
+        const finalBaseUrl = newBaseUrl || process.env.OPENAI_BASE_URL || '';
+        if (finalBaseUrl.includes('integrate.api.nvidia.com')) {
+          if (!newModel.includes('meta/llama')) {
+            newModel = 'meta/llama-3.1-70b-instruct';
+          }
+        } else if (finalBaseUrl.includes('api.openai.com')) {
+          if (newModel.includes('llama')) {
+            newModel = 'gpt-4o';
+          }
+        }
+        
+        // We can just update the global orchestrator's provider for this local playground
+        // rather than recreating a tempOrchestrator which wipes agent memory.
+        const provider = new OpenAIProvider({
+          apiKey: newApiKey,
+          baseURL: newBaseUrl
         });
-
-        const tempOrchestrator = new Orchestrator({
-          provider: clientProvider,
-          AgentClass: Agent,
-          defaultModel: config.model || process.env.DEFAULT_MODEL || 'gpt-4o'
-        });
-
-        // Copy over registered subagents from the global orchestrator registry
-        for (const agent of orchestrator.listAgents()) {
-          if (agent.id !== 'jarvis-meta-agent') {
-            tempOrchestrator.registerAgent(agent);
-          }
-        }
-
-        // Wake up temp orchestrator session state to match global session state
-        if (orchestrator.isSessionOpen()) {
-          await tempOrchestrator.handleInput("Hey JARVIS");
-        }
-
-        const result = await tempOrchestrator.handleInput(message);
-
-        // Sync back session active states
-        if (!result.sessionActive) {
-          orchestrator.closeSession();
-        } else {
-          // Sync any newly created child agents back to global registry
-          for (const agent of tempOrchestrator.listAgents()) {
-            if (!orchestrator.findAgent(agent.id)) {
-              orchestrator.registerAgent(agent);
-            }
-          }
-          if (!orchestrator.isSessionOpen()) {
-            await orchestrator.handleInput("Hey JARVIS");
-          }
-        }
-
-        return res.json(result);
+        
+        // Use any provided config settings or fallback to defaults
+        // Need to bypass TypeScript's private modifiers for this quick local playground fix
+        (orchestrator as any).provider = provider;
+        (orchestrator as any).defaultModel = newModel;
+        
+        // Update jarvis meta-agent as well
+        (orchestrator as any).jarvisAgent.provider = provider;
+        (orchestrator as any).jarvisAgent.model = newModel;
       }
 
       const result = await orchestrator.handleInput(message);

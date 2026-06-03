@@ -5,7 +5,8 @@ import {
   globalBus, 
   ModelProvider, 
   ToolDefinition, 
-  ExecutionContext 
+  ExecutionContext,
+  ChatMessage
 } from '@jarvis-ai/core';
 
 export class Agent {
@@ -17,7 +18,7 @@ export class Agent {
   public tools: ToolDefinition[] = [];
   public state: AgentState = 'Uninitialized';
   
-  private messageHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
+  private messageHistory: ChatMessage[] = [];
   private children: Agent[] = [];
   private unsubscribeBus?: () => void;
 
@@ -74,6 +75,7 @@ export class Agent {
   public async run(query: string, context?: Partial<ExecutionContext>): Promise<string> {
     this.state = 'Executing';
     const ctx: ExecutionContext = {
+      ...context,
       agentId: this.id,
       correlationId: context?.correlationId || `corr-${Date.now()}`,
       parentId: context?.parentId
@@ -99,17 +101,32 @@ export class Agent {
     let iterationCount = 0;
     const maxIterations = 10;
     let finalAnswer = '';
+    const executedToolCalls = new Set<string>();
+    let availableTools = this.tools;
 
     while (loop && iterationCount < maxIterations) {
       iterationCount++;
       
-      const response = await this.provider.generateResponse(this.messageHistory, this.tools, {
+      const response = await this.provider.generateResponse(this.messageHistory, availableTools, {
         model: this.model
       });
 
-      if (response.content) {
-        this.messageHistory.push({ role: 'assistant', content: response.content });
-        finalAnswer = response.content;
+      if (response.content || (response.toolCalls && response.toolCalls.length > 0)) {
+        this.messageHistory.push({
+          role: 'assistant',
+          content: response.content || null,
+          tool_calls: response.toolCalls?.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: {
+              name: tc.name,
+              arguments: tc.arguments
+            }
+          }))
+        });
+        if (response.content) {
+          finalAnswer = response.content;
+        }
       }
 
       if (response.toolCalls && response.toolCalls.length > 0) {
@@ -124,10 +141,54 @@ export class Agent {
         });
 
         for (const tc of response.toolCalls) {
+          // Prevent infinite tool invocation loops by normalizing arguments
+          let normalizedArgs = tc.arguments.trim();
+          try {
+            const parsed = JSON.parse(tc.arguments);
+            const agentId = parsed.agentIdentifier || parsed.agentAIdentifier || parsed.name || '';
+            const task = parsed.task || parsed.instructions || '';
+            const cleanAgent = agentId.toLowerCase().replace(/^agent-/, '');
+            const cleanTask = task.toLowerCase().replace(/[^a-z0-9]/g, '');
+            normalizedArgs = `${cleanAgent}:${cleanTask}`;
+          } catch (e) {
+            // Fallback
+          }
+
+          const callSignature = `${tc.name}:${normalizedArgs}`;
+
+          // Guard: Limit total tool call executions to prevent long-running loops
+          if (executedToolCalls.size >= 4 && !executedToolCalls.has(callSignature)) {
+            this.messageHistory.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              name: tc.name,
+              content: `Error: You have reached the maximum allowed tool execution limit (4) for this request. You must formulate and present your final response to the user now using the results you already have in history. Do NOT call any more tools.`
+            });
+            availableTools = [];
+            continue;
+          }
+
+          if (executedToolCalls.has(callSignature)) {
+            this.messageHistory.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              name: tc.name,
+              content: `Error: You have already executed the tool "${tc.name}" with similar arguments. Do NOT call this tool again. Based on the previous tool results in your message history, please formulate and write your final text response to the user now.`
+            });
+            availableTools = [];
+            continue;
+          }
+          executedToolCalls.add(callSignature);
+
           const tool = this.tools.find(t => t.name === tc.name);
           if (!tool) {
             const errorMsg = `Tool ${tc.name} not found.`;
-            this.messageHistory.push({ role: 'user', content: `Error: ${errorMsg}` });
+            this.messageHistory.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              name: tc.name,
+              content: `Error: ${errorMsg}`
+            });
             continue;
           }
 
@@ -136,8 +197,10 @@ export class Agent {
             const toolResult = await tool.execute(parsedArgs, context);
             
             this.messageHistory.push({
-              role: 'user',
-              content: `Tool "${tc.name}" execution result: ${JSON.stringify(toolResult)}`
+              role: 'tool',
+              tool_call_id: tc.id,
+              name: tc.name,
+              content: JSON.stringify(toolResult)
             });
 
             await globalBus.publish({
@@ -150,13 +213,31 @@ export class Agent {
             });
           } catch (err: any) {
             const errorMsg = `Error running tool "${tc.name}": ${err.message}`;
-            this.messageHistory.push({ role: 'user', content: errorMsg });
+            this.messageHistory.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              name: tc.name,
+              content: errorMsg
+            });
+
+            await globalBus.publish({
+              id: `evt-${Math.random().toString(36).substring(2, 9)}`,
+              timestamp: Date.now(),
+              sender: { id: this.id, role: this.name },
+              recipient: { type: 'orchestrator', id: 'core' },
+              topic: 'agent.tool.end',
+              payload: { toolName: tc.name, output: { status: 'error', error: err.message } }
+            });
           }
         }
       } else {
         // No tool calls, finish the loop
         loop = false;
       }
+    }
+    
+    if (!finalAnswer && iterationCount >= maxIterations) {
+      finalAnswer = "I apologize, but I could not complete the request successfully after multiple attempts. Here is what I know so far.";
     }
 
     return finalAnswer;

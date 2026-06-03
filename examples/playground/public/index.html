@@ -379,9 +379,38 @@
       letter-spacing: 1px;
       margin-top: 1rem;
     }
+    #start-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(11, 12, 16, 0.95);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    #start-overlay .overlay-content {
+      text-align: center;
+      background: var(--card-bg);
+      padding: 3rem;
+      border-radius: 20px;
+      border: 1px solid var(--accent-color);
+      box-shadow: 0 0 30px var(--glow-color);
+    }
+    #start-overlay h2 {
+      color: var(--accent-color);
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 <body>
+
+  <div id="start-overlay">
+    <div class="overlay-content">
+      <h2>Initialize JARVIS</h2>
+      <p>Click anywhere to unlock browser audio and start listening.</p>
+    </div>
+  </div>
 
   <button class="settings-btn" id="openSettingsBtn">⚙️</button>
 
@@ -405,6 +434,11 @@
         <span class="sender">System</span>
         <span class="content">Voice system initialized. Tap the orb if recognition pauses. Say "Hey JARVIS" to wake the system.</span>
       </div>
+    </div>
+
+    <div class="input-bar">
+      <input type="text" id="textInput" placeholder="Or type your message here..." autocomplete="off">
+      <button id="sendBtn">Send</button>
     </div>
 
   </div>
@@ -536,10 +570,19 @@
       consolePanel.scrollTop = consolePanel.scrollHeight;
     }
 
+    let keepAliveInterval = null;
+
     // Initialize text-to-speech voicing
     function speakText(text, resumeListening = true) {
-      // Force cancel and resume to unfreeze Chrome/Safari speech queue
-      synth.cancel();
+      if (!synth) return;
+
+      isSpeaking = true;
+
+      if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
+      // Only cancel if actively speaking. Unconditional cancel() breaks the Chrome speech queue permanently.
+      if (synth.speaking || synth.pending) {
+        synth.cancel();
+      }
       if (synth.paused) {
         synth.resume();
       }
@@ -548,102 +591,162 @@
       voiceOrb.className = 'orb speaking';
       statusMessage.textContent = 'JARVIS Speaking...';
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.volume = 1.0;
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      
-      // Select a nice male/female natural voice if available
-      const voices = synth.getVoices();
-      const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Daniel'));
-      if (preferredVoice) {
-        utterance.voice = preferredVoice;
-      }
-
-      console.log('JARVIS Voicing:', text, 'Voice:', utterance.voice ? utterance.voice.name : 'System Default');
-
-      utterance.onend = () => {
+      if (!text || text.trim() === '') {
+        // If there is no text, don't speak, just immediately finish
         isSpeaking = false;
         voiceOrb.className = 'orb listening';
         statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
-        if (resumeListening) {
-          // Resume recognition loop
-          startListening();
-        }
-      };
-
-      utterance.onerror = (e) => {
-        console.error('Speech synthesis error:', e);
-        isSpeaking = false;
-        voiceOrb.className = 'orb listening';
-        if (resumeListening) {
-          startListening();
-        }
-      };
-
-      synth.speak(utterance);
-    }
-
-    // Initialize speech recognition
-    function setupRecognition() {
-      if (!SpeechRecognition) {
-        statusMessage.textContent = 'Speech recognition not supported in this browser.';
+        if (resumeListening) startListening();
         return;
       }
 
-      recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
+      // Clean up markdown formatting so it sounds better
+      const cleanText = text.replace(/[*_#`~]+/g, '').replace(/\n+/g, '. ');
+      
+      // Split text by sentence boundaries to avoid Chrome's 15-second SpeechSynthesis bug
+      const chunks = cleanText.match(/[^.!?]+[.!?]+|\s+[^.!?]+$/g) || [cleanText];
+      let chunkIndex = 0;
 
-      recognition.onstart = () => {
-        if (!isSpeaking) {
-          voiceOrb.className = 'orb listening';
-          statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
+      function speakNextChunk() {
+        if (chunkIndex >= chunks.length) {
+          setTimeout(() => {
+            isSpeaking = false;
+            voiceOrb.className = 'orb listening';
+            statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
+            if (resumeListening) {
+              startListening();
+            }
+          }, 1000); // 1-second cooldown to ignore any trailing echo of his own voice
+          return;
         }
-      };
+
+        const chunk = chunks[chunkIndex].trim();
+        if (!chunk) {
+          chunkIndex++;
+          speakNextChunk();
+          return;
+        }
+
+        window.currentUtterance = new SpeechSynthesisUtterance(chunk);
+        window.currentUtterance.volume = 1.0;
+        window.currentUtterance.rate = 1.0;
+        window.currentUtterance.pitch = 1.0;
+        
+        const voices = synth.getVoices();
+        const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Daniel'));
+        if (preferredVoice) {
+          window.currentUtterance.voice = preferredVoice;
+        }
+
+        window.currentUtterance.onend = () => {
+          chunkIndex++;
+          speakNextChunk();
+        };
+
+        window.currentUtterance.onerror = (e) => {
+          console.error('Speech synthesis error:', e);
+          isSpeaking = false;
+          voiceOrb.className = 'orb listening';
+          if (resumeListening) {
+            startListening();
+          }
+        };
+
+        synth.speak(window.currentUtterance);
+      }
+
+      speakNextChunk();
+    }
+
 
     async function processMessage(text) {
       if (!text) return;
       
-      // Pause speech recognition while sending request and voicing output
-      if (recognition) {
-        try {
-          recognition.stop();
-        } catch (e) {
-          // Already stopped
-        }
+      // Frontend wake word detection
+      const isWakeWord = /\b(hey\s+)?jarvis\b/i.test(text);
+      if (isWakeWord) {
+        isActiveSession = true;
+        voiceOrb.className = 'orb listening';
       }
 
+      if (!isActiveSession) {
+        addMessage('System', 'Session is standby. Tap the orb or say "Hey JARVIS" to activate.');
+        return;
+      }
+
+      // Do not stop recognition here. We will instead ignore any transcripts received while JARVIS is speaking via the onresult handler.
+
+      let thinkingTimeout = null;
       try {
         statusMessage.textContent = 'Thinking...';
-        speakText('Thinking...', false);
+        
+        // Add delayed filler text if the request takes a while
+        thinkingTimeout = setTimeout(() => {
+          let filler = "One moment, sir.";
+          const lower = text.toLowerCase();
+          
+          if (lower.includes('weather') || lower.includes('temperature')) {
+            filler = "Checking the latest meteorological data, sir.";
+          } else if (lower.includes('time') || lower.includes('date')) {
+            filler = "Checking the temporal data, sir.";
+          } else if (lower.includes('who is') || lower.includes('what is') || lower.includes('search') || lower.includes('find')) {
+            const queries = ["Looking that up in the database, sir.", "Searching external knowledge bases, sir.", "Retrieving that information now."];
+            filler = queries[Math.floor(Math.random() * queries.length)];
+          } else if (lower.includes('calculate') || lower.includes('math') || lower.includes('plus') || lower.includes('minus')) {
+            filler = "Running the calculations now, sir.";
+          } else if (lower.includes('play') || lower.includes('music') || lower.includes('song')) {
+            filler = "Accessing media controls, sir.";
+          } else if (lower.includes('turn on') || lower.includes('turn off') || lower.includes('lights')) {
+            filler = "Interfacing with home automation, sir.";
+          } else if (lower.includes('code') || lower.includes('program') || lower.includes('script') || lower.includes('error') || lower.includes('bug')) {
+            filler = "Analyzing the system code, sir.";
+          } else {
+            const defaultFillers = [
+              "One moment, sir.", 
+              "Processing your request.", 
+              "Let me process that for you, sir."
+            ];
+            filler = defaultFillers[Math.floor(Math.random() * defaultFillers.length)];
+          }
+          
+          speakText(filler, false);
+        }, 2500);
 
         const savedConfig = JSON.parse(localStorage.getItem('jarvis_config') || '{}');
         
         const res = await fetch('/api/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({ 
             message: text,
-            config: savedConfig.apiKey ? savedConfig : null
+            config: savedConfig ? savedConfig : null
           })
         });
 
         const data = await res.json();
-        isActiveSession = data.sessionActive;
-
+        if (thinkingTimeout) clearTimeout(thinkingTimeout);
+        
         // Stop speech synthesis if it's currently speaking "Thinking..."
         if (synth.speaking) {
           synth.cancel();
         }
 
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        isActiveSession = data.sessionActive;
+
         addMessage('JARVIS', data.response);
-        speakText(data.response, true);
+        speakText(data.response || '', true);
       } catch (err) {
+        if (thinkingTimeout) clearTimeout(thinkingTimeout);
         console.error(err);
-        addMessage('System', 'Failed to connect to orchestrator backend.');
-        speakText('I encountered a connection error.', true);
+        const msg = err.message || 'Failed to connect to orchestrator backend.';
+        addMessage('System', msg);
+        speakText('I encountered an error.', true);
       }
     }
 
@@ -667,8 +770,22 @@
       };
 
       recognition.onresult = async (event) => {
-        const transcript = event.results[0][0].transcript.trim();
+        const transcript = event.results[event.results.length - 1][0].transcript.trim();
         if (!transcript) return;
+
+        // Allow user to interrupt JARVIS
+        if (isSpeaking) {
+          const lower = transcript.toLowerCase();
+          if (lower.includes('jarvis') || lower.includes('stop')) {
+            if (synth.speaking || synth.pending) {
+              synth.cancel();
+            }
+            isSpeaking = false;
+            addMessage('System', 'Interrupted by user.');
+            statusMessage.textContent = 'Listening for "Hey JARVIS"...';
+          }
+          return;
+        }
 
         addMessage('You', transcript);
         await processMessage(transcript);
@@ -684,10 +801,8 @@
       };
 
       recognition.onend = () => {
-        // Continuous auto-restart loop if not speaking
-        if (!isSpeaking) {
-          startListening();
-        }
+        // Continuous auto-restart loop unconditionally to allow interruption
+        startListening();
       };
     }
 
@@ -727,10 +842,24 @@
       startListening();
     });
 
-    // Boot
+    // Boot Sequence
     loadSavedConfig();
     setupRecognition();
-    setTimeout(startListening, 1000);
+    
+    // Auto-play policy requires user interaction before audio can play
+    const startOverlay = document.getElementById('start-overlay');
+    startOverlay.addEventListener('click', () => {
+      // Unlock SpeechSynthesis queue with a blank utterance
+      const unlockUtterance = new SpeechSynthesisUtterance('');
+      synth.speak(unlockUtterance);
+      
+      // Hide overlay
+      startOverlay.style.display = 'none';
+      
+      // Start listening
+      setTimeout(startListening, 300);
+      addMessage('System', 'Voice system initialized. Say "Hey JARVIS" to wake the system.');
+    });
   </script>
 </body>
 </html>

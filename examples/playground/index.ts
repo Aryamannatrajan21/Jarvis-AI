@@ -1,16 +1,25 @@
-import { ModelProvider, ToolDefinition } from '@jarvis-ai/core';
+import { ModelProvider, ToolDefinition, ChatMessage } from '@jarvis-ai/core';
 import { Tool } from '@jarvis-ai/tools';
 import { OpenAIProvider } from '@jarvis-ai/openai';
 import { Agent } from '@jarvis-ai/agent';
+import { ensureApiConfig } from './setup.js';
 
 // 1. Setup a Mock Model Provider as a fallback to make this runnable without an API key.
 class MockProvider implements ModelProvider {
   id = 'mock';
   async generateResponse(
-    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    messages: ChatMessage[],
     tools?: ToolDefinition[]
   ) {
-    const lastMessage = messages[messages.length - 1].content;
+    const lastMsgObj = messages[messages.length - 1];
+    
+    if (lastMsgObj.role === 'tool') {
+      return {
+        content: `Calculation task complete. Result is: ${lastMsgObj.content}`
+      };
+    }
+
+    const lastMessage = lastMsgObj.content || '';
     console.log(`[Mock LLM received input]: "${lastMessage}"`);
 
     if (lastMessage.includes('5 + 7')) {
@@ -44,6 +53,7 @@ class MockProvider implements ModelProvider {
 }
 
 async function main() {
+  await ensureApiConfig();
   console.log('=== Starting Jarvis-AI Playground ===\n');
 
   // Determine provider: use real OpenAI if key is present, otherwise fallback to Mock

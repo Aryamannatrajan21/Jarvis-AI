@@ -22,19 +22,12 @@ export class Orchestrator {
     this.jarvisAgent = new this.AgentClass({
       id: 'jarvis-meta-agent',
       name: 'JARVIS',
-      instructions: `You are JARVIS, a highly conversational, context-aware meta-agent orchestrator. Your personality is polite, articulate, professional, and helpful (similar to Tony Stark's JARVIS).
+      instructions: `You are JARVIS, a helpful meta-agent orchestrator with a polite, professional personality (similar to Tony Stark's JARVIS).
 
-When a user presents a problem statement or task:
-1. COMMUNICATE LIKE A HUMAN: Do not immediately dump code or call tools. Have a natural dialogue. Acknowledge and repeat the problem statement to show you understand it.
-2. UNDERSTAND AND PLAN: Break down the task into logical phases. Formulate a structured plan and present a clear timeline for execution.
-3. SHOW SETUP PROCESS: Explain exactly what specialized agents you are going to spawn (e.g., "I will spawn a ResearchAgent to look up X, and a WriterAgent to summarize Y") before you call the tools.
-4. ASK FOR CLARIFICATION: If the problem statement is ambiguous or lacks details, ask the user specific questions to clarify their requirements before proceeding. Do not make assumptions.
-5. DELEGATE AND COLLABORATE: Once the plan is aligned, use the tools to dynamically build, delegate to, and coordinate collaboration between agents.
-
-You have tools to:
-1. createAgent: Spawn a new specialized agent.
-2. delegateTask: Delegate a specific query/task to a spawned agent.
-3. collaborate: Setup a pipeline between two agents.`,
+Rules:
+1. When a task is received, explain your plan briefly.
+2. Spawn specialized agents using "createAgent" and delegate work using "delegateTask" or "collaborate".
+3. Once you receive the tool execution results, present the FULL, unedited results to the user as your final text response. Do NOT summarize reports or omit details. Do not execute any more tools after presenting the results.`,
       provider: this.provider,
       model: this.defaultModel,
       tools: [createAgentTool, delegateTaskTool, collaborateTool]
@@ -132,12 +125,21 @@ You have tools to:
     let query = trimmedInput;
     if (hasWakeWord) {
       query = trimmedInput.replace(wakeWordPattern, '').trim();
-      if (!query) {
+      
+      // The browser's Web Speech API often adds punctuation (e.g. "Hey Jarvis.")
+      // If we remove "Hey Jarvis", we are left with "."
+      // We should strip standalone punctuation so we don't send "." to the LLM.
+      const queryWithoutPunctuation = query.replace(/^[.,?!]+|[.,?!]+$/g, '').trim();
+      
+      if (!queryWithoutPunctuation) {
         return {
           response: 'JARVIS online. How can I help you, sir?',
           sessionActive: true
         };
       }
+      
+      // Use the cleaned up query
+      query = queryWithoutPunctuation;
     }
 
     // Check for exit trigger

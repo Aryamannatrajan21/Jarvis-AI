@@ -17,10 +17,7 @@ export const createAgentTool: ToolDefinition = {
       throw new Error('Orchestrator context missing.');
     }
     const newAgent = orchestrator.createAgent(args.name, args.instructions);
-    return {
-      status: 'success',
-      message: `Agent "${args.name}" created successfully with ID: ${newAgent.id}`
-    };
+    return `Agent "${args.name}" created successfully with ID: ${newAgent.id}`;
   }
 };
 
@@ -42,23 +39,17 @@ export const delegateTaskTool: ToolDefinition = {
     }
     const agent = orchestrator.findAgent(args.agentIdentifier);
     if (!agent) {
-      return {
-        status: 'error',
-        message: `Agent "${args.agentIdentifier}" not found. Available agents: ${orchestrator.listAgents().map((a: any) => a.name).join(', ')}`
-      };
+      return `Error: Agent "${args.agentIdentifier}" not found. Available agents: ${orchestrator.listAgents().map((a: any) => a.name).join(', ')}`;
     }
 
     console.log(`\n[Orchestrator]: Delegating task to "${agent.name}"...`);
     const result = await agent.run(args.task, {
       correlationId: context.correlationId,
-      parentId: context.agentId
+      parentId: context.agentId,
+      orchestrator: context.orchestrator
     });
     
-    return {
-      status: 'success',
-      agent: agent.name,
-      result
-    };
+    return `Task completed by agent "${agent.name}":\n\n${result}`;
   }
 };
 
@@ -83,10 +74,7 @@ export const collaborateTool: ToolDefinition = {
     const agentB = orchestrator.findAgent(args.agentBIdentifier);
 
     if (!agentA || !agentB) {
-      return {
-        status: 'error',
-        message: `Failed to start collaboration. One or both agents not found.`
-      };
+      return `Error: Failed to start collaboration. One or both agents not found.`;
     }
 
     console.log(`\n[Orchestrator]: Starting collaboration sequence between "${agentA.name}" and "${agentB.name}"...`);
@@ -94,7 +82,8 @@ export const collaborateTool: ToolDefinition = {
     // Step 1: Run Agent A
     const resultA = await agentA.run(args.task, {
       correlationId: context.correlationId,
-      parentId: context.agentId
+      parentId: context.agentId,
+      orchestrator: context.orchestrator
     });
 
     console.log(`\n[Orchestrator]: Agent "${agentA.name}" finished. Passing result to "${agentB.name}"...`);
@@ -102,13 +91,10 @@ export const collaborateTool: ToolDefinition = {
     // Step 2: Pass result to Agent B
     const finalResult = await agentB.run(`Here is the input from ${agentA.name}: "${resultA}". Please process it and provide the final output.`, {
       correlationId: context.correlationId,
-      parentId: context.agentId
+      parentId: context.agentId,
+      orchestrator: context.orchestrator
     });
 
-    return {
-      status: 'success',
-      sequence: [agentA.name, agentB.name],
-      finalResult
-    };
+    return `Collaboration sequence completed between "${agentA.name}" and "${agentB.name}".\n\nFinal Result:\n${finalResult}`;
   }
 };
