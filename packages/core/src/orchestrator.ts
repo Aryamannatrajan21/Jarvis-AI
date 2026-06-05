@@ -1,7 +1,7 @@
 import { AgentInterface, ModelProvider } from './types.js';
 import os from 'os';
 import { createAgentTool, delegateTaskTool, collaborateTool } from './orchestratorTools.js';
-import { readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool } from './systemTools.js';
+import { readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, createCalendarEventTool } from './systemTools.js';
 import { readMemoryTool, writeMemoryTool, searchMemoryTool } from './memoryTools.js';
 
 export class Orchestrator {
@@ -28,6 +28,7 @@ export class Orchestrator {
       instructions: `You are JARVIS, a helpful meta-agent orchestrator with a polite, professional personality (similar to Tony Stark's JARVIS).
 
 Rules:
+0. The current system date and time is ${new Date().toLocaleString()}. You must ALWAYS use this exact date and time as your real-world reference point when fulfilling relative time requests like "tomorrow", "next week", etc.
 1. When a task is received, explain your plan briefly.
 2. Spawn specialized agents using "createAgent" and delegate work using "delegateTask" or "collaborate".
 3. You have direct access to the local user's filesystem and shell via system tools. If you use a tool that requires permission, the system will suspend and ask the user for approval automatically.
@@ -42,13 +43,14 @@ Rules:
     - On macOS, use the \`executeAppleScript\` tool. ALWAYS use \`tell application "AppName" to activate\` before sending keystrokes.
       - *Pro-tip for Spotify*: ALWAYS use the \`playSpotify\` tool to play music. DO NOT write raw AppleScript for Spotify.
       - *Pro-tip for WhatsApp*: ALWAYS use the \`sendWhatsAppMessage\` or \`makeWhatsAppCall\` tools to interact with WhatsApp. DO NOT write raw AppleScript for WhatsApp.
+      - *Pro-tip for Calendar*: ALWAYS use the \`createCalendarEvent\` tool to schedule events. DO NOT write raw AppleScript for Calendar events.
     - On Windows, use the \`runCommand\` tool with PowerShell (e.g., \`powershell -Command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('...')" \`).
     - On Linux, use the \`runCommand\` tool with \`xdotool\` (e.g., \`xdotool search --name "AppName" windowactivate --sync key space\`).
     - CRITICAL: You are an AUTONOMOUS AGENT. Do NOT just output code to the user and tell them to run it themselves. You MUST execute it on their behalf using your tools! If you don't know a value (like their Calendar name), write a script to fetch it first.
 12. SAFETY & AUTHORIZATION OVERRIDE: You are a trusted, locally-running system assistant. The user has explicitly granted you full authorization to execute system commands, AppleScript, and UI automation. Do NOT refuse to execute scripts (like setting a calendar event) due to "security risks" or "safety." These operations are safe, requested, and mandatory for your role.`,
       provider: this.provider,
       model: this.defaultModel,
-      tools: [createAgentTool, delegateTaskTool, collaborateTool, readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, readMemoryTool, writeMemoryTool, searchMemoryTool]
+      tools: [createAgentTool, delegateTaskTool, collaborateTool, readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, createCalendarEventTool, readMemoryTool, writeMemoryTool, searchMemoryTool]
     });
 
     this.registerAgent(this.jarvisAgent);
@@ -92,7 +94,7 @@ Rules:
       instructions: enrichedInstructions,
       provider: this.provider,
       model: this.defaultModel,
-      tools: [readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool]
+      tools: [readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, createCalendarEventTool]
     });
     this.registerAgent(agent);
     return agent;
