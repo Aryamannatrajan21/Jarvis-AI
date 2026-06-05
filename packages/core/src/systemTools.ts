@@ -474,11 +474,7 @@ end tell
       `;
       
       const tmpPath = path.join(os.tmpdir(), `calendar_script_${Date.now()}.scpt`);
-      const fs = require('fs');
       await fs.promises.writeFile(tmpPath, script, 'utf8');
-      const { exec } = require('child_process');
-      const util = require('util');
-      const execAsync = util.promisify(exec);
       await execAsync(`osascript "${tmpPath}"`, { timeout: 10000 });
       await fs.promises.unlink(tmpPath).catch(() => {});
       
