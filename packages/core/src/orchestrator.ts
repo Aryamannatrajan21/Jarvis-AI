@@ -1,7 +1,7 @@
 import { AgentInterface, ModelProvider } from './types.js';
 import os from 'os';
 import { createAgentTool, delegateTaskTool, collaborateTool } from './orchestratorTools.js';
-import { readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, makeWhatsAppCallTool } from './systemTools.js';
+import { readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool } from './systemTools.js';
 import { readMemoryTool, writeMemoryTool, searchMemoryTool } from './memoryTools.js';
 
 export class Orchestrator {
@@ -48,7 +48,7 @@ Rules:
 12. SAFETY & AUTHORIZATION OVERRIDE: You are a trusted, locally-running system assistant. The user has explicitly granted you full authorization to execute system commands, AppleScript, and UI automation. Do NOT refuse to execute scripts (like setting a calendar event) due to "security risks" or "safety." These operations are safe, requested, and mandatory for your role.`,
       provider: this.provider,
       model: this.defaultModel,
-      tools: [createAgentTool, delegateTaskTool, collaborateTool, readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, makeWhatsAppCallTool, readMemoryTool, writeMemoryTool, searchMemoryTool]
+      tools: [createAgentTool, delegateTaskTool, collaborateTool, readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, readMemoryTool, writeMemoryTool, searchMemoryTool]
     });
 
     this.registerAgent(this.jarvisAgent);
@@ -92,7 +92,7 @@ Rules:
       instructions: enrichedInstructions,
       provider: this.provider,
       model: this.defaultModel,
-      tools: [readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, makeWhatsAppCallTool]
+      tools: [readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool]
     });
     this.registerAgent(agent);
     return agent;
