@@ -353,3 +353,55 @@ export const playSpotifyTool: ToolDefinition = {
     }
   }
 };
+
+export const sendWhatsAppMessageTool: ToolDefinition = {
+  name: 'sendWhatsAppMessage',
+  description: 'Natively opens WhatsApp and sends a message to a specific contact. Use this INSTEAD of AppleScript whenever the user asks to send a WhatsApp message.',
+  schema: {
+    type: 'object',
+    properties: {
+      contactName: { type: 'string', description: 'The name of the contact to message.' },
+      message: { type: 'string', description: 'The text message to send.' }
+    },
+    required: ['contactName', 'message']
+  },
+  requiresApproval: true,
+  execute: async (args, context) => {
+    if (os.platform() !== 'darwin') {
+      throw new Error('This tool is currently only supported on macOS.');
+    }
+    try {
+      // Escape quotes and backslashes for AppleScript
+      const safeContact = args.contactName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const safeMessage = args.message.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      
+      const script = `
+        tell application "WhatsApp" to activate
+        delay 1.5
+        tell application "System Events"
+          keystroke "f" using command down
+          delay 0.5
+          keystroke "${safeContact}"
+          delay 1
+          key code 36 -- Return key
+          delay 1
+          keystroke "${safeMessage}"
+          delay 0.5
+          key code 36 -- Return key
+        end tell
+      `;
+      
+      const tmpPath = path.join(os.tmpdir(), `whatsapp_script_${Date.now()}.scpt`);
+      await fs.promises.writeFile(tmpPath, script, 'utf8');
+      await execAsync(`osascript "${tmpPath}"`, { timeout: 15000 });
+      await fs.promises.unlink(tmpPath).catch(() => {});
+      
+      return `Successfully sent message to ${args.contactName} on WhatsApp.`;
+    } catch (err: any) {
+      if (err.message.includes('Not authorized to send Apple events')) {
+        throw new Error('AppleScript execution blocked by macOS Security. Please grant Terminal Accessibility permissions.');
+      }
+      throw new Error(`Failed to send WhatsApp message: ${err.message}`);
+    }
+  }
+};

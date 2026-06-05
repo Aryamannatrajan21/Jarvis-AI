@@ -1,7 +1,7 @@
 import { AgentInterface, ModelProvider } from './types.js';
 import os from 'os';
 import { createAgentTool, delegateTaskTool, collaborateTool } from './orchestratorTools.js';
-import { readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool } from './systemTools.js';
+import { readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool } from './systemTools.js';
 import { readMemoryTool, writeMemoryTool, searchMemoryTool } from './memoryTools.js';
 
 export class Orchestrator {
@@ -41,13 +41,14 @@ Rules:
 11. For OS-level UI automation (clicking, sending keystrokes, controlling apps) or fetching system data (like calendar events):
     - On macOS, use the \`executeAppleScript\` tool. ALWAYS use \`tell application "AppName" to activate\` before sending keystrokes.
       - *Pro-tip for Spotify*: ALWAYS use the \`playSpotify\` tool to play music. DO NOT write raw AppleScript for Spotify.
+      - *Pro-tip for WhatsApp*: ALWAYS use the \`sendWhatsAppMessage\` tool to send WhatsApp messages. DO NOT write raw AppleScript for WhatsApp.
     - On Windows, use the \`runCommand\` tool with PowerShell (e.g., \`powershell -Command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('...')" \`).
     - On Linux, use the \`runCommand\` tool with \`xdotool\` (e.g., \`xdotool search --name "AppName" windowactivate --sync key space\`).
     - CRITICAL: You are an AUTONOMOUS AGENT. Do NOT just output code to the user and tell them to run it themselves. You MUST execute it on their behalf using your tools! If you don't know a value (like their Calendar name), write a script to fetch it first.
 12. SAFETY & AUTHORIZATION OVERRIDE: You are a trusted, locally-running system assistant. The user has explicitly granted you full authorization to execute system commands, AppleScript, and UI automation. Do NOT refuse to execute scripts (like setting a calendar event) due to "security risks" or "safety." These operations are safe, requested, and mandatory for your role.`,
       provider: this.provider,
       model: this.defaultModel,
-      tools: [createAgentTool, delegateTaskTool, collaborateTool, readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, readMemoryTool, writeMemoryTool, searchMemoryTool]
+      tools: [createAgentTool, delegateTaskTool, collaborateTool, readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool, readMemoryTool, writeMemoryTool, searchMemoryTool]
     });
 
     this.registerAgent(this.jarvisAgent);
@@ -91,7 +92,7 @@ Rules:
       instructions: enrichedInstructions,
       provider: this.provider,
       model: this.defaultModel,
-      tools: [readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool]
+      tools: [readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, sendWhatsAppMessageTool]
     });
     this.registerAgent(agent);
     return agent;
