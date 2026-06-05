@@ -377,22 +377,29 @@ export const sendWhatsAppMessageTool: ToolDefinition = {
       
       const script = `
         tell application "WhatsApp" to activate
-        delay 1.5
+        delay 2
+        
         tell application "System Events"
-          tell process "WhatsApp"
-            set frontmost to true
-            keystroke "n" using command down
-            delay 1
-            keystroke "${safeContact}"
-            delay 2
-            key code 125 -- Down arrow
-            delay 0.5
-            key code 36 -- Return key
-            delay 1.5
-            keystroke "${safeMessage}"
-            delay 0.5
-            key code 36 -- Return key
-          end tell
+          -- Open New Chat
+          keystroke "n" using command down
+          delay 2.5
+          
+          -- Paste contact name
+          set the clipboard to "${safeContact}"
+          keystroke "v" using command down
+          delay 2.5
+          
+          -- Select contact
+          key code 125 -- Down arrow
+          delay 0.5
+          key code 36 -- Return key
+          delay 2.5
+          
+          -- Paste message and send
+          set the clipboard to "${safeMessage}"
+          keystroke "v" using command down
+          delay 1
+          key code 36 -- Return key
         end tell
       `;
       
