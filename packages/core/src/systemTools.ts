@@ -451,28 +451,23 @@ export const makeWhatsAppCallTool: ToolDefinition = {
             set frontmost to true
             delay 1
             
-            -- Open New Chat
-            keystroke "n" using command down
-            delay 2.5
-            
-            -- Paste contact name
-            set the clipboard to "${safeContact}"
-            keystroke "v" using command down
-            delay 4
-            
-            -- Select contact
-            key code 125 -- Down arrow
-            delay 0.5
-            key code 36 -- Return key
-            
-            delay 3
-            
-            -- Initiate Call using correct macOS Native shortcuts
+            -- Open New Call Window
             if "${args.callType}" is "video" then
               keystroke "v" using {command down, shift down}
             else
               keystroke "c" using {command down, shift down}
             end if
+            delay 2.5
+            
+            -- Paste contact name into the call search bar
+            set the clipboard to "${safeContact}"
+            keystroke "v" using command down
+            delay 4
+            
+            -- Select contact and initiate call
+            key code 125 -- Down arrow
+            delay 0.5
+            key code 36 -- Return key
           end tell
         end tell
       `;
