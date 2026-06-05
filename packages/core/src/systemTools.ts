@@ -379,17 +379,20 @@ export const sendWhatsAppMessageTool: ToolDefinition = {
         tell application "WhatsApp" to activate
         delay 1.5
         tell application "System Events"
-          keystroke "n" using command down
-          delay 1
-          keystroke "${safeContact}"
-          delay 2
-          key code 125 -- Down arrow
-          delay 0.5
-          key code 36 -- Return key
-          delay 1.5
-          keystroke "${safeMessage}"
-          delay 0.5
-          key code 36 -- Return key
+          tell process "WhatsApp"
+            set frontmost to true
+            keystroke "n" using command down
+            delay 1
+            keystroke "${safeContact}"
+            delay 2
+            key code 125 -- Down arrow
+            delay 0.5
+            key code 36 -- Return key
+            delay 1.5
+            keystroke "${safeMessage}"
+            delay 0.5
+            key code 36 -- Return key
+          end tell
         end tell
       `;
       
