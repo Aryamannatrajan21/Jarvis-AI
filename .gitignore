@@ -6,3 +6,7 @@ dist/
 .env
 *.env
 **/.env
+
+# JARVIS Memory
+Jarvis-AI-Second-Brain/*
+!Jarvis-AI-Second-Brain/.gitkeep
