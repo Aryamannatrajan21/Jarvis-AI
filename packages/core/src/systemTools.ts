@@ -451,50 +451,93 @@ export const makeWhatsAppCallTool: ToolDefinition = {
             set frontmost to true
             delay 1
             
-            -- Open New Call Window
-            keystroke "c" using {command down, shift down}
+            -- Open New Chat
+            keystroke "n" using command down
             delay 2.5
             
-            -- Paste contact name into the call search bar
+            -- Paste contact name
             set the clipboard to "${safeContact}"
             keystroke "v" using command down
-            
-            -- Wait for the contact search results to load
             delay 4
             
-            -- Initiate Call using Accessibility UI Search in the New Call Window
+            -- Select contact and open chat
+            key code 125 -- Down arrow
+            delay 0.5
+            key code 36 -- Return key
+            
+            -- Wait for the chat to fully load
+            delay 3
+            
             set callTarget to "Voice call"
             if "${args.callType}" is "video" then set callTarget to "Video call"
             set altTarget to "Audio call"
             
             set btnClicked to false
+            
+            -- Optimized Accessibility Search: Only check toolbars and top-level groups to avoid timing out on chat history
             try
-              -- The New Call window/sidebar is small, so entire contents is fast
-              set allElems to entire contents of window 1
-              repeat with elem in allElems
-                try
-                  if class of elem is button then
-                    set n to name of elem
-                    set d to description of elem
-                    if (n is not missing value and (n contains callTarget or n contains altTarget)) or (d is not missing value and (d contains callTarget or d contains altTarget)) then
-                      click elem
-                      set btnClicked to true
-                      exit repeat
-                    end if
-                  end if
-                end try
+              set tbButtons to buttons of toolbar 1 of window 1
+              repeat with b in tbButtons
+                 set n to name of b
+                 set d to description of b
+                 if (n is not missing value and (n contains callTarget or n contains altTarget)) or (d is not missing value and (d contains callTarget or d contains altTarget)) then
+                    click b
+                    set btnClicked to true
+                    exit repeat
+                 end if
               end repeat
             end try
             
-            -- Coordinate Fallback
             if not btnClicked then
-               set {w, h} to size of window 1
-               set {x, y} to position of window 1
-               if "${args.callType}" is "video" then
-                 click at {x + w - 100, y + 150}
-               else
-                 click at {x + w - 60, y + 150}
-               end if
+              try
+                set topGroups to groups of window 1
+                repeat with g in topGroups
+                   -- The header group is not a scroll area
+                   if class of g is not scroll area then
+                     set grpButtons to buttons of g
+                     repeat with b in grpButtons
+                       set n to name of b
+                       set d to description of b
+                       if (n is not missing value and (n contains callTarget or n contains altTarget)) or (d is not missing value and (d contains callTarget or d contains altTarget)) then
+                          click b
+                          set btnClicked to true
+                          exit repeat
+                       end if
+                     end repeat
+                   end if
+                   if btnClicked then exit repeat
+                end repeat
+              end try
+            end if
+            
+            if not btnClicked then
+               -- Attempt to search one more level deep in groups
+               try
+                 set topGroups to groups of window 1
+                 repeat with g in topGroups
+                    set subGroups to groups of g
+                    repeat with sg in subGroups
+                       if class of sg is not scroll area then
+                         set grpButtons to buttons of sg
+                         repeat with b in grpButtons
+                           set n to name of b
+                           set d to description of b
+                           if (n is not missing value and (n contains callTarget or n contains altTarget)) or (d is not missing value and (d contains callTarget or d contains altTarget)) then
+                              click b
+                              set btnClicked to true
+                              exit repeat
+                           end if
+                         end repeat
+                       end if
+                       if btnClicked then exit repeat
+                    end repeat
+                    if btnClicked then exit repeat
+                 end repeat
+               end try
+            end if
+            
+            if not btnClicked then
+              error "Could not find the call button in the chat header."
             end if
           end tell
         end tell
