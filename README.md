@@ -43,6 +43,14 @@ An open-source, npm-installable monorepo framework that allows developers to cre
 npm install jarvis-ai
 ```
 
+### Second Brain (Long-Term Memory)
+JARVIS comes with a built-in long-term memory system that stores information in a local directory (`Jarvis-AI-Second-Brain`). While optional, it is **highly recommended** to use [Obsidian](https://obsidian.md/) (or an alternative Markdown knowledge base like Logseq or Notion) to visually manage and explore these memories:
+1. Download and install [Obsidian](https://obsidian.md/).
+2. Open Obsidian and select **"Open folder as vault"**.
+3. Select the `Jarvis-AI-Second-Brain` directory located in the root of this project.
+
+JARVIS will autonomously read, write, and search markdown files in this vault to manage his memories. You can also manually view or edit these memories in any text or Markdown editor of your choice at any time!
+
 ---
 
 ## Configuration & API Keys
@@ -119,7 +127,7 @@ console.log(report);
 ```
 
 ### Interactive Orchestrator (Live Chat)
-You can instantiate the global `Orchestrator` and process continuous natural language conversations. It handles wake word detection ("Hey JARVIS"), registers spawned agents, and performs tool orchestration:
+You can instantiate the global `Orchestrator` and process continuous natural language conversations. It handles wake word detection, registers spawned agents, and performs tool orchestration:
 
 ```typescript
 import { Orchestrator } from '@jarvis-ai/core';
@@ -140,6 +148,25 @@ To run the live chat terminal demo:
 ```bash
 npm run start:chat
 ```
+
+### Voice Chat & Web Interface
+JARVIS includes a fully functional, hands-free voice chat interface powered by Web Speech API and Web Audio API.
+
+To launch the web interface:
+1. Open your terminal in the root of the project.
+2. Run `npm run start:voice`
+
+**Features of the Voice Interface:**
+- **Custom Wake Words**: Configure your own custom wake word by clicking the ⚙️ Settings icon.
+- **Acoustic Triggers**: JARVIS runs a background transient spike detector. You can configure it to wake JARVIS up with a **Double Clap** or **Double Snap** instead of (or alongside) the wake word!
+- **Voice Interruption**: Simply say your wake word, or snap your fingers twice, to immediately interrupt JARVIS while he is speaking.
+- **Voice Approval**: When JARVIS wants to run a system command, he will display a popup. Simply say "Yes", "Approve", or "Do it" to grant permission.
+
+### Cross-Platform Desktop UI Automation
+JARVIS has deep integration with the host operating system, allowing him to take over the mouse, keyboard, and foreground applications. He is pre-configured with rules to dynamically select the right automation tool based on the OS:
+- **macOS**: Uses the dedicated `executeAppleScript` tool. **Note:** You MUST manually grant your Terminal app "Accessibility" and "Automation" permissions in `System Settings > Privacy & Security` for UI scripting to work.
+- **Windows**: Uses PowerShell with `SendKeys`.
+- **Linux**: Uses `xdotool` and `wmctrl`.
 
 ---
 

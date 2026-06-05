@@ -36,7 +36,7 @@ class MockVoiceOrchestrationProvider implements ModelProvider {
         toolCalls: [{
           id: 'call-spawn',
           name: 'createAgent',
-          arguments: JSON.stringify({ name, instructions: `You are the specialized ${name}.` })
+          arguments: JSON.stringify({ agents: [{ name, instructions: `You are the specialized ${name}.` }] })
         }]
       };
     }
@@ -137,7 +137,10 @@ async function startServer() {
         (orchestrator as any).jarvisAgent.model = newModel;
       }
 
-      const result = await orchestrator.handleInput(message);
+      const result = await orchestrator.handleInput(message, config?.wakeWord);
+      console.log('--- API CHAT RESPONSE ---');
+      console.log(JSON.stringify(result, null, 2));
+      console.log('-------------------------');
       res.json(result);
     } catch (error: any) {
       console.error('Error handling orchestrator input:', error);
@@ -145,12 +148,50 @@ async function startServer() {
     }
   });
 
-  app.listen(PORT, () => {
-    console.log(`\n====================================================`);
-    console.log(`  JARVIS Voice Live Chat server running at:`);
-    console.log(`  👉 http://localhost:${PORT}`);
-    console.log(`====================================================\n`);
+  // New endpoint to handle human-in-the-loop tool approvals
+  app.post('/api/approve', async (req, res) => {
+    try {
+      const { toolCallId, toolName, args } = req.body;
+      
+      if (!toolCallId || !toolName) {
+        return res.status(400).json({ error: 'toolCallId and toolName are required.' });
+      }
+
+      // Resume JARVIS execution with the approved tool
+      // Since orchestrator doesn't expose jarvisAgent directly, we use typescript any to access it
+      const jarvisAgent = (orchestrator as any).jarvisAgent;
+      
+      const response = await jarvisAgent.resumeWithApproval(toolCallId, toolName, args, {
+        orchestrator
+      });
+
+      res.json({ response, sessionActive: orchestrator.isSessionOpen() });
+    } catch (error: any) {
+      console.error('Error handling approval:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
+
+  const startListening = (port: number) => {
+    const server = app.listen(port, () => {
+      console.log(`\n====================================================`);
+      console.log(`  JARVIS Voice Live Chat server running at:`);
+      console.log(`  👉 http://localhost:${port}`);
+      console.log(`====================================================\n`);
+    });
+
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`Port ${port} is in use, trying ${port + 1}...`);
+        startListening(port + 1);
+      } else {
+        console.error('Server error:', err);
+      }
+    });
+  };
+
+  const initialPort = typeof PORT === 'string' ? parseInt(PORT, 10) : PORT;
+  startListening(initialPort);
 }
 
 startServer().catch(console.error);

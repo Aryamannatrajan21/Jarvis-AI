@@ -2,22 +2,52 @@ import { ToolDefinition } from './types.js';
 
 export const createAgentTool: ToolDefinition = {
   name: 'createAgent',
-  description: 'Create and register a new AI agent with a name and specialized system instructions.',
+  description: 'Create and register one or more AI agents with specialized system instructions.',
   schema: {
     type: 'object',
     properties: {
-      name: { type: 'string', description: 'Name of the agent' },
-      instructions: { type: 'string', description: 'Specialized behavior instructions' }
+      agents: {
+        type: 'array',
+        description: 'List of agents to create.',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Name of the agent' },
+            instructions: { type: 'string', description: 'Specialized behavior instructions' }
+          },
+          required: ['name', 'instructions']
+        }
+      }
     },
-    required: ['name', 'instructions']
+    required: ['agents']
   },
   execute: async (args, context) => {
     const orchestrator = context.orchestrator;
     if (!orchestrator) {
       throw new Error('Orchestrator context missing.');
     }
-    const newAgent = orchestrator.createAgent(args.name, args.instructions);
-    return `Agent "${args.name}" created successfully with ID: ${newAgent.id}`;
+    const results = [];
+    
+    // Safely parse if LLM hallucinates a stringified array
+    let agentsToCreate = args.agents;
+    if (typeof agentsToCreate === 'string') {
+      try {
+        agentsToCreate = JSON.parse(agentsToCreate);
+      } catch (e) {
+        throw new Error('Failed to parse agents array string: ' + (e as Error).message);
+      }
+    }
+    
+    if (!Array.isArray(agentsToCreate)) {
+      throw new Error('args.agents must be an array of agent objects.');
+    }
+
+    for (const agentData of agentsToCreate) {
+      if (!agentData.name) continue; // Prevent toLowerCase crash
+      const newAgent = orchestrator.createAgent(agentData.name, agentData.instructions || '');
+      results.push(`Agent "${agentData.name}" created successfully with ID: ${newAgent.id}`);
+    }
+    return results.join('\n');
   }
 };
 

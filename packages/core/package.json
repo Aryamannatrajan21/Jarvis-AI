@@ -15,7 +15,12 @@
     "build": "tsc",
     "dev": "tsc -w"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@types/pdfkit": "^0.17.6",
+    "docx": "^9.7.1",
+    "exceljs": "^4.4.0",
+    "pdfkit": "^0.18.0"
+  },
   "devDependencies": {
     "typescript": "^5.3.3"
   }

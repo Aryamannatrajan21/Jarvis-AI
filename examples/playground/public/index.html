@@ -470,6 +470,14 @@
         <label for="modelInput">Model Name</label>
         <input type="text" id="modelInput" placeholder="e.g. gpt-4o or meta/llama-3.1-70b-instruct">
       </div>
+      <div class="form-group">
+        <label for="wakeWordInput">Wake Word</label>
+        <input type="text" id="wakeWordInput" placeholder="e.g. hey jarvis">
+      </div>
+      <div class="form-group" style="flex-direction: row; align-items: center; justify-content: space-between;">
+        <label for="acousticTriggerToggle" style="margin-bottom: 0;">Enable Acoustic Triggers (Double Clap/Snap)</label>
+        <input type="checkbox" id="acousticTriggerToggle" style="width: auto;">
+      </div>
       <button class="btn-save" id="saveSettingsBtn">Save Configuration</button>
     </div>
   </div>
@@ -490,7 +498,19 @@
     const baseUrlInput = document.getElementById('baseUrlInput');
     const baseUrlGroup = document.getElementById('baseUrlGroup');
     const modelInput = document.getElementById('modelInput');
+    const wakeWordInput = document.getElementById('wakeWordInput');
+    const acousticTriggerToggle = document.getElementById('acousticTriggerToggle');
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+
+    let currentWakeWord = 'hey jarvis';
+    function updateWakeWordUI() {
+      const displayWord = currentWakeWord.toLowerCase() === 'hey jarvis' ? '"Hey JARVIS"' : `"${currentWakeWord}"`;
+      if (isSpeaking) {
+        statusMessage.textContent = 'JARVIS Speaking...';
+      } else {
+        statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : `Listening for ${displayWord}...`;
+      }
+    }
 
     // Web Speech API interfaces
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -509,6 +529,27 @@
       if (config.apiKey) apiKeyInput.value = config.apiKey;
       if (config.baseUrl) baseUrlInput.value = config.baseUrl;
       if (config.model) modelInput.value = config.model;
+      if (config.wakeWord) {
+        wakeWordInput.value = config.wakeWord;
+        currentWakeWord = config.wakeWord;
+      } else {
+        wakeWordInput.value = 'hey jarvis';
+        currentWakeWord = 'hey jarvis';
+      }
+      
+      if (config.acousticTrigger !== undefined) {
+        acousticTriggerToggle.checked = config.acousticTrigger;
+      } else {
+        acousticTriggerToggle.checked = false;
+      }
+      
+      updateWakeWordUI();
+      
+      if (acousticTriggerToggle.checked) {
+        setupAcousticTrigger();
+      } else {
+        stopAcousticTrigger();
+      }
     }
 
     function toggleBaseUrlField(provider) {
@@ -544,12 +585,23 @@
         provider: providerSelect.value,
         apiKey: apiKeyInput.value.trim(),
         baseUrl: providerSelect.value === 'nvidia' ? 'https://integrate.api.nvidia.com/v1' : baseUrlInput.value.trim(),
-        model: modelInput.value.trim()
+        model: modelInput.value.trim(),
+        wakeWord: wakeWordInput.value.trim() || 'hey jarvis',
+        acousticTrigger: acousticTriggerToggle.checked
       };
+      
+      currentWakeWord = config.wakeWord;
+      updateWakeWordUI();
       
       localStorage.setItem('jarvis_config', JSON.stringify(config));
       settingsModal.style.display = 'none';
       addMessage('System', 'Configuration saved. The model provider has been updated.');
+      
+      if (config.acousticTrigger) {
+        setupAcousticTrigger();
+      } else {
+        stopAcousticTrigger();
+      }
     });
 
     function addMessage(sender, content) {
@@ -571,6 +623,97 @@
     }
 
     let keepAliveInterval = null;
+    let speechBuffer = '';
+    let speechBufferTimeout = null;
+    const SPEECH_PAUSE_MS = 1500; // Wait 1.5s after user stops speaking before submitting
+
+    // --- Acoustic Trigger Logic ---
+    let audioContext;
+    let analyser;
+    let microphoneStream;
+    let acousticRafId;
+    let clapCount = 0;
+    let lastClapTime = 0;
+    const CLAP_COOLDOWN = 150; // ms to wait before detecting next clap
+    const MAX_CLAP_INTERVAL = 1000; // max ms between first and second clap
+    const VOLUME_THRESHOLD = 90; // out of 128 - increased to require very loud claps
+
+    async function setupAcousticTrigger() {
+      if (audioContext) return; // Already running
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        microphoneStream = stream;
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        detectAcoustics();
+      } catch (err) {
+        console.error('Failed to initialize acoustic trigger:', err);
+        addMessage('System', 'Microphone permission denied for Acoustic Trigger.');
+        acousticTriggerToggle.checked = false;
+      }
+    }
+
+    function stopAcousticTrigger() {
+      if (acousticRafId) cancelAnimationFrame(acousticRafId);
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      if (microphoneStream) {
+        microphoneStream.getTracks().forEach(track => track.stop());
+        microphoneStream = null;
+      }
+      clapCount = 0;
+    }
+
+    function detectAcoustics() {
+      if (!audioContext || !analyser) return;
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteTimeDomainData(dataArray);
+
+      let maxVolume = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        let vol = Math.abs(dataArray[i] - 128);
+        if (vol > maxVolume) maxVolume = vol;
+      }
+      
+      const now = Date.now();
+      
+      if (maxVolume > VOLUME_THRESHOLD) {
+        if (now - lastClapTime > CLAP_COOLDOWN) {
+          if (clapCount > 0 && now - lastClapTime > MAX_CLAP_INTERVAL) {
+            clapCount = 0; // Reset if too much time passed
+          }
+          
+          clapCount++;
+          lastClapTime = now;
+          
+          if (clapCount >= 2) {
+            clapCount = 0;
+            if (!isActiveSession) {
+              isActiveSession = true;
+              voiceOrb.className = 'orb listening';
+              updateWakeWordUI();
+              // Play a tiny beep to acknowledge
+              try {
+                const osc = audioContext.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, audioContext.currentTime);
+                osc.connect(audioContext.destination);
+                osc.start();
+                osc.stop(audioContext.currentTime + 0.1);
+              } catch (e) {}
+            }
+          }
+        }
+      }
+
+      acousticRafId = requestAnimationFrame(detectAcoustics);
+    }
+    // --- End Acoustic Trigger Logic ---
 
     // Initialize text-to-speech voicing
     function speakText(text, resumeListening = true) {
@@ -611,6 +754,7 @@
         if (chunkIndex >= chunks.length) {
           setTimeout(() => {
             isSpeaking = false;
+            window.lastSpeakEndTime = Date.now();
             voiceOrb.className = 'orb listening';
             statusMessage.textContent = isActiveSession ? 'Listening (Active)...' : 'Listening for "Hey JARVIS"...';
             if (resumeListening) {
@@ -646,6 +790,7 @@
         window.currentUtterance.onerror = (e) => {
           console.error('Speech synthesis error:', e);
           isSpeaking = false;
+          window.lastSpeakEndTime = Date.now();
           voiceOrb.className = 'orb listening';
           if (resumeListening) {
             startListening();
@@ -658,20 +803,84 @@
       speakNextChunk();
     }
 
+    function handleAgentResponse(data) {
+      if (data.response && data.response.includes('__jarvis_permission_request')) {
+        let jsonStr = data.response.trim();
+        if (jsonStr.startsWith('```json')) {
+          jsonStr = jsonStr.replace(/```json\n?/, '').replace(/```\s*$/, '').trim();
+        }
+        
+        let parsedResp = null;
+        try {
+          parsedResp = JSON.parse(jsonStr);
+        } catch(e) {
+          // Fallback: extract substring using brace matching
+          const startIdx = data.response.indexOf('{"__jarvis_permission_request"');
+          if (startIdx !== -1) {
+            let depth = 0;
+            let endIdx = -1;
+            for (let i = startIdx; i < data.response.length; i++) {
+              if (data.response[i] === '{') depth++;
+              if (data.response[i] === '}') {
+                depth--;
+                if (depth === 0) {
+                  endIdx = i;
+                  break;
+                }
+              }
+            }
+            if (endIdx !== -1) {
+              try {
+                parsedResp = JSON.parse(data.response.substring(startIdx, endIdx + 1));
+              } catch(e2) {}
+            }
+          }
+        }
+
+        if (parsedResp && parsedResp.__jarvis_permission_request) {
+          addPermissionPrompt(parsedResp);
+          return; // Stop here, wait for user action
+        } else {
+          addMessage('System', 'DEBUG: Found permission request marker but failed to extract valid JSON.');
+          return; // Don't print raw JSON to JARVIS window
+        }
+      }
+
+      addMessage('JARVIS', data.response);
+      speakText(data.response || '', true);
+    }
 
     async function processMessage(text) {
       if (!text) return;
       
       // Frontend wake word detection
-      const isWakeWord = /\b(hey\s+)?jarvis\b/i.test(text);
+      const regexStr = currentWakeWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special chars
+      const isWakeWord = new RegExp(`\\b${regexStr}\\b`, 'i').test(text);
       if (isWakeWord) {
         isActiveSession = true;
         voiceOrb.className = 'orb listening';
       }
 
       if (!isActiveSession) {
-        addMessage('System', 'Session is standby. Tap the orb or say "Hey JARVIS" to activate.');
+        const displayWord = currentWakeWord.toLowerCase() === 'hey jarvis' ? '"Hey JARVIS"' : `"${currentWakeWord}"`;
+        addMessage('System', `Session is standby. Tap the orb or say ${displayWord} to activate.`);
         return;
+      }
+
+      // Check for voice-based permission approvals
+      if (window.pendingApproval) {
+        const lower = text.toLowerCase();
+        if (lower.includes('yes') || lower.includes('approve') || lower.includes('do it') || lower.includes('ok') || lower.includes('sure') || lower.includes('go ahead')) {
+          const action = window.pendingApproval.accept;
+          window.pendingApproval = null;
+          action();
+          return;
+        } else if (lower.includes('no') || lower.includes('reject') || lower.includes('cancel') || lower.includes('stop') || lower.includes('don\'t')) {
+          const action = window.pendingApproval.reject;
+          window.pendingApproval = null;
+          action();
+          return;
+        }
       }
 
       // Do not stop recognition here. We will instead ignore any transcripts received while JARVIS is speaking via the onresult handler.
@@ -739,8 +948,7 @@
 
         isActiveSession = data.sessionActive;
 
-        addMessage('JARVIS', data.response);
-        speakText(data.response || '', true);
+        handleAgentResponse(data);
       } catch (err) {
         if (thinkingTimeout) clearTimeout(thinkingTimeout);
         console.error(err);
@@ -748,6 +956,76 @@
         addMessage('System', msg);
         speakText('I encountered an error.', true);
       }
+    }
+
+    function addPermissionPrompt(req) {
+      speakText('I need your permission to run a system command, sir.', true);
+      
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'message system';
+      
+      const contentSpan = document.createElement('span');
+      contentSpan.className = 'content';
+      
+      const codeBlock = document.createElement('pre');
+      codeBlock.style.background = '#0b0c10';
+      codeBlock.style.padding = '10px';
+      codeBlock.style.border = '1px solid #c5c6c7';
+      codeBlock.textContent = `Action: ${req.toolName}\nArguments: ${JSON.stringify(req.args, null, 2)}`;
+      
+      const desc = document.createElement('p');
+      desc.textContent = 'JARVIS is requesting permission to execute this system tool. Do you approve?';
+      
+      const acceptBtn = document.createElement('button');
+      acceptBtn.textContent = 'Accept';
+      acceptBtn.style.marginRight = '10px';
+      acceptBtn.onclick = async () => {
+        acceptBtn.disabled = true;
+        rejectBtn.disabled = true;
+        msgDiv.style.opacity = '0.5';
+        addMessage('You', 'Action Approved.');
+        
+        try {
+          const res = await fetch('/api/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req)
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          
+          isActiveSession = data.sessionActive;
+          handleAgentResponse(data);
+        } catch (err) {
+          addMessage('System', 'Approval failed: ' + err.message);
+        }
+      };
+      
+      const rejectBtn = document.createElement('button');
+      rejectBtn.textContent = 'Reject';
+      rejectBtn.onclick = () => {
+        acceptBtn.disabled = true;
+        rejectBtn.disabled = true;
+        msgDiv.style.opacity = '0.5';
+        addMessage('You', 'Action Rejected.');
+        addMessage('JARVIS', 'Understood. I have aborted the action.');
+        speakText('Understood, action aborted.', true);
+        window.pendingApproval = null;
+      };
+
+      // Set global pending approval so voice commands can trigger these buttons
+      window.pendingApproval = {
+        accept: () => acceptBtn.click(),
+        reject: () => rejectBtn.click()
+      };
+      
+      contentSpan.appendChild(desc);
+      contentSpan.appendChild(codeBlock);
+      contentSpan.appendChild(acceptBtn);
+      contentSpan.appendChild(rejectBtn);
+      msgDiv.appendChild(contentSpan);
+      consolePanel.appendChild(msgDiv);
+      consolePanel.scrollTop = consolePanel.scrollHeight;
     }
 
     // Initialize speech recognition
@@ -769,26 +1047,40 @@
         }
       };
 
-      recognition.onresult = async (event) => {
-        const transcript = event.results[event.results.length - 1][0].transcript.trim();
-        if (!transcript) return;
+      recognition.onresult = (event) => {
+        const transcriptChunk = event.results[event.results.length - 1][0].transcript.trim();
+        if (!transcriptChunk) return;
 
         // Allow user to interrupt JARVIS
-        if (isSpeaking) {
-          const lower = transcript.toLowerCase();
-          if (lower.includes('jarvis') || lower.includes('stop')) {
+        const isRecentlySpeaking = isSpeaking || (window.lastSpeakEndTime && (Date.now() - window.lastSpeakEndTime < 2500));
+        
+        if (isRecentlySpeaking) {
+          const lower = transcriptChunk.toLowerCase();
+          
+          const isWakeInterrupt = lower.includes(currentWakeWord.toLowerCase()) || lower.includes('stop');
+          if (isWakeInterrupt) {
             if (synth.speaking || synth.pending) {
               synth.cancel();
             }
             isSpeaking = false;
+            window.lastSpeakEndTime = 0;
             addMessage('System', 'Interrupted by user.');
-            statusMessage.textContent = 'Listening for "Hey JARVIS"...';
+            updateWakeWordUI();
           }
+          // Always ignore other transcripts that arrive during or immediately after speech to prevent echo loops
           return;
         }
 
-        addMessage('You', transcript);
-        await processMessage(transcript);
+        // Buffer the speech to prevent cutting sentences short
+        speechBuffer += (speechBuffer ? ' ' : '') + transcriptChunk;
+        
+        if (speechBufferTimeout) clearTimeout(speechBufferTimeout);
+        speechBufferTimeout = setTimeout(async () => {
+          const finalTranscript = speechBuffer;
+          speechBuffer = ''; // Clear buffer
+          addMessage('You', finalTranscript);
+          await processMessage(finalTranscript);
+        }, SPEECH_PAUSE_MS);
       };
 
       recognition.onerror = (e) => {

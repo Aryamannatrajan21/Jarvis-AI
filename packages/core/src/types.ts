@@ -37,6 +37,7 @@ export interface ToolDefinition<TInput = any, TOutput = any> {
   name: string;
   description: string;
   schema: Record<string, any>; // JSON Schema for validation
+  requiresApproval?: boolean;  // If true, execution pauses and requires explicit user consent via HITL
   execute: (args: TInput, context: ExecutionContext) => Promise<TOutput>;
 }
 

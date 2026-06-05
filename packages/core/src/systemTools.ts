@@ -1,0 +1,291 @@
+import { ToolDefinition } from './types.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import PDFDocument from 'pdfkit';
+import { Document, Packer, Paragraph, TextRun } from 'docx';
+import ExcelJS from 'exceljs';
+
+const execAsync = promisify(exec);
+
+const resolvePath = (p: string) => {
+  if (p.startsWith('~/') || p === '~') {
+    return p.replace(/^~/, os.homedir());
+  }
+  return path.resolve(process.cwd(), p);
+};
+
+export const readFileTool: ToolDefinition = {
+  name: 'readFile',
+  description: 'Reads the contents of a local file on the system.',
+  requiresApproval: true,
+  schema: {
+    type: 'object',
+    properties: {
+      filePath: { type: 'string', description: 'Absolute or relative path to the file to read.' }
+    },
+    required: ['filePath']
+  },
+  execute: async (args, context) => {
+    try {
+      const targetPath = resolvePath(args.filePath);
+      const content = await fs.promises.readFile(targetPath, 'utf-8');
+      return `File contents of ${targetPath}:\n\n${content}`;
+    } catch (err: any) {
+      throw new Error(`Failed to read file: ${err.message}`);
+    }
+  }
+};
+
+export const writeFileTool: ToolDefinition = {
+  name: 'writeFile',
+  description: 'Writes content to a local file, creating or overwriting it.',
+  requiresApproval: true,
+  schema: {
+    type: 'object',
+    properties: {
+      filePath: { type: 'string', description: 'Absolute or relative path to the file.' },
+      content: { type: 'string', description: 'The text content to write into the file.' }
+    },
+    required: ['filePath', 'content']
+  },
+  execute: async (args, context) => {
+    try {
+      const targetPath = resolvePath(args.filePath);
+      const dir = path.dirname(targetPath);
+      await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.writeFile(targetPath, args.content, 'utf-8');
+      return `Successfully wrote file to ${targetPath}`;
+    } catch (err: any) {
+      throw new Error(`Failed to write file: ${err.message}`);
+    }
+  }
+};
+
+export const runCommandTool: ToolDefinition = {
+  name: 'runCommand',
+  description: 'Executes a shell command on the local system (macOS/Linux) and returns the standard output. IMPORTANT: NEVER run interactive commands (like vim, nano, or commands with interactive flags like rm -i) as they will hang indefinitely. NEVER use sudo, as it requires a password prompt that will hang the system. Always use non-interactive flags (e.g. rm -f).',
+  schema: {
+    type: 'object',
+    properties: {
+      command: { type: 'string', description: 'Command to execute' },
+      cwd: { type: 'string', description: 'Working directory. Defaults to project root.' }
+    },
+    required: ['command']
+  },
+  requiresApproval: true,
+  execute: async (args, context) => {
+    if (args.command.trim().startsWith('sudo ') || args.command.includes(' sudo ')) {
+      throw new Error('Command execution failed: "sudo" is strictly forbidden because it requires an interactive password prompt which will hang the agent. Do not use sudo.');
+    }
+
+    try {
+      const cwd = args.cwd ? resolvePath(args.cwd) : process.cwd();
+      
+      // Verify the cwd exists before trying to run a command in it
+      try {
+        const stats = await fs.promises.stat(cwd);
+        if (!stats.isDirectory()) {
+          throw new Error(`The specified cwd is not a directory: ${cwd}`);
+        }
+      } catch (err: any) {
+        if (err.code === 'ENOENT') {
+          throw new Error(`The specified cwd does not exist: ${cwd}`);
+        }
+        throw err;
+      }
+
+      const { stdout, stderr } = await execAsync(args.command, { cwd, timeout: 15000 });
+      let result = '';
+      if (stdout) result += `Standard Output:\n${stdout}\n`;
+      if (stderr) result += `Standard Error:\n${stderr}\n`;
+      return result.trim() || `Command executed successfully with no output.`;
+    } catch (err: any) {
+      if (err.killed && err.signal === 'SIGTERM') {
+        throw new Error(`Command execution failed: Timeout (15s) exceeded. The command may have been interactive and hung waiting for user input. Do not use interactive commands.`);
+      }
+      throw new Error(`Command execution failed: ${err.message}\nOutput: ${err.stdout || ''}\nError: ${err.stderr || ''}`);
+    }
+  }
+};
+
+export const exportDocumentTool: ToolDefinition = {
+  name: 'exportDocument',
+  description: 'Compiles text/data into rich formats like PDF, DOCX, and XLSX.',
+  requiresApproval: true,
+  schema: {
+    type: 'object',
+    properties: {
+      filePath: { type: 'string', description: 'Absolute or relative path to the file. Must end in .pdf, .docx, or .xlsx' },
+      format: { type: 'string', description: 'The format to generate: "pdf", "docx", or "xlsx"' },
+      content: { type: 'string', description: 'The markdown/text content for PDF/DOCX, or JSON array string for XLSX.' }
+    },
+    required: ['filePath', 'format', 'content']
+  },
+  execute: async (args, context) => {
+    try {
+      const targetPath = resolvePath(args.filePath);
+      const dir = path.dirname(targetPath);
+      await fs.promises.mkdir(dir, { recursive: true });
+
+      if (args.format === 'pdf') {
+        return new Promise((resolve, reject) => {
+          const doc = new PDFDocument();
+          const writeStream = fs.createWriteStream(targetPath);
+          doc.pipe(writeStream);
+          doc.text(args.content);
+          doc.end();
+          writeStream.on('finish', () => resolve(`Successfully created PDF at ${targetPath}`));
+          writeStream.on('error', reject);
+        });
+      } else if (args.format === 'docx') {
+        const doc = new Document({
+          sections: [{
+            properties: {},
+            children: args.content.split('\n').map((line: string) => new Paragraph({ children: [new TextRun(line)] }))
+          }]
+        });
+        const buffer = await Packer.toBuffer(doc);
+        await fs.promises.writeFile(targetPath, buffer);
+        return `Successfully created DOCX at ${targetPath}`;
+      } else if (args.format === 'xlsx') {
+        let data;
+        try {
+          data = JSON.parse(args.content);
+          if (!Array.isArray(data)) throw new Error('Data must be a JSON array');
+        } catch (e) {
+          throw new Error('For XLSX, content must be a valid JSON array of objects.');
+        }
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Sheet 1');
+        if (data.length > 0) {
+          sheet.columns = Object.keys(data[0]).map(key => ({ header: key, key }));
+          sheet.addRows(data);
+        }
+        await workbook.xlsx.writeFile(targetPath);
+        return `Successfully created XLSX at ${targetPath}`;
+      } else {
+        throw new Error(`Unsupported format: ${args.format}`);
+      }
+    } catch (err: any) {
+      throw new Error(`Failed to export document: ${err.message}`);
+    }
+  }
+};
+
+export const generateChartTool: ToolDefinition = {
+  name: 'generateChart',
+  description: 'Generates a beautiful image of a chart (line, bar, pie, etc.) and saves it as a PNG, JPEG, WEBP, or SVG. Uses the QuickChart API. Pass a valid Chart.js configuration object.',
+  requiresApproval: true,
+  schema: {
+    type: 'object',
+    properties: {
+      filePath: { type: 'string', description: 'Absolute path to save the chart image (must end in .png, .jpg, .jpeg, .webp, or .svg)' },
+      chartConfig: { type: 'object', description: 'A valid Chart.js configuration object (e.g. {"type": "line", "data": {...}})' }
+    },
+    required: ['filePath', 'chartConfig']
+  },
+  execute: async (args, context) => {
+    try {
+      const targetPath = resolvePath(args.filePath);
+      const dir = path.dirname(targetPath);
+      await fs.promises.mkdir(dir, { recursive: true });
+
+      let format = 'png';
+      const lowerPath = targetPath.toLowerCase();
+      if (lowerPath.endsWith('.svg')) format = 'svg';
+      else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) format = 'jpeg';
+      else if (lowerPath.endsWith('.webp')) format = 'webp';
+      
+      let configObj;
+      if (typeof args.chartConfig === 'object') {
+        configObj = args.chartConfig;
+      } else if (typeof args.chartConfig === 'string') {
+        let str = args.chartConfig.trim();
+        try {
+          // First attempt strict JSON parse
+          configObj = JSON.parse(str);
+        } catch (e1: any) {
+          try {
+            // Fallback: evaluate as Javascript object literal.
+            // This handles unquoted keys, single quotes, and trailing commas that LLMs often generate.
+            configObj = new Function('return ' + str)();
+          } catch (e2: any) {
+             // If it still fails, it might be missing trailing braces due to generation cutoff
+             try {
+                configObj = new Function('return ' + str + '}')();
+             } catch (e3) {
+                try {
+                   configObj = new Function('return ' + str + '}}')();
+                } catch (e4) {
+                   try {
+                      configObj = new Function('return ' + str + ']}}')();
+                   } catch (e5) {
+                      throw new Error('chartConfig must be a valid JSON object or JS literal: ' + e1.message);
+                   }
+                }
+             }
+          }
+        }
+      } else {
+        throw new Error('chartConfig must be a valid JSON object.');
+      }
+
+      const url = `https://quickchart.io/chart?format=${format}&c=${encodeURIComponent(JSON.stringify(configObj))}`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`QuickChart API error: ${response.statusText}`);
+      }
+
+      if (format === 'svg') {
+        const svgContent = await response.text();
+        await fs.promises.writeFile(targetPath, svgContent, 'utf-8');
+      } else {
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        await fs.promises.writeFile(targetPath, buffer);
+      }
+
+      return `Successfully generated and saved chart to ${targetPath}`;
+    } catch (err: any) {
+      throw new Error(`Failed to generate chart: ${err.message}`);
+    }
+  }
+};
+
+export const executeAppleScriptTool: ToolDefinition = {
+  name: 'executeAppleScript',
+  description: 'Executes AppleScript code to control macOS applications, open apps, or perform UI automation. IMPORTANT: When sending keystrokes or using System Events, you MUST bring the target app to the foreground first using `tell application "AppName" to activate`, otherwise keystrokes will go to the wrong app and silently fail!',
+  schema: {
+    type: 'object',
+    properties: {
+      script: { type: 'string', description: 'The raw AppleScript code to execute.' }
+    },
+    required: ['script']
+  },
+  requiresApproval: true,
+  execute: async (args, context) => {
+    try {
+      const tmpPath = path.join(os.tmpdir(), `jarvis_script_${Date.now()}.scpt`);
+      await fs.promises.writeFile(tmpPath, args.script, 'utf8');
+      
+      const { stdout, stderr } = await execAsync(`osascript "${tmpPath}"`, { timeout: 15000 });
+      
+      // Cleanup
+      await fs.promises.unlink(tmpPath).catch(() => {});
+      
+      let result = '';
+      if (stdout) result += `Output:\n${stdout}\n`;
+      if (stderr) result += `Error:\n${stderr}\n`;
+      return result.trim() || `AppleScript executed successfully.`;
+    } catch (err: any) {
+      if (err.message.includes('Not authorized to send Apple events') || err.message.includes('System Events got an error') || err.message.includes('not allowed to send')) {
+        throw new Error('AppleScript execution blocked by macOS Security. TELL THE USER: "I cannot control this app because the Terminal/IDE running JARVIS needs Accessibility and Automation permissions. Please go to macOS System Settings > Privacy & Security > Accessibility, and grant permission."');
+      }
+      throw new Error(`AppleScript execution failed: ${err.message}`);
+    }
+  }
+};

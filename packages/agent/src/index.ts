@@ -95,7 +95,9 @@ export class Agent {
    * Run the agent execution loop, resolving tools until a final response is generated.
    */
   private async executeLoop(query: string, context: ExecutionContext): Promise<string> {
-    this.messageHistory.push({ role: 'user', content: query });
+    if (query) {
+      this.messageHistory.push({ role: 'user', content: query });
+    }
 
     let loop = true;
     let iterationCount = 0;
@@ -162,7 +164,7 @@ export class Agent {
               role: 'tool',
               tool_call_id: tc.id,
               name: tc.name,
-              content: `Error: You have reached the maximum allowed tool execution limit (4) for this request. You must formulate and present your final response to the user now using the results you already have in history. Do NOT call any more tools.`
+              content: `CRITICAL ERROR: You have reached the maximum allowed tool execution limit (4). Your last action FAILED. You MUST explicitly tell the user that the action failed and ask for their help or clarification. DO NOT pretend the action succeeded.`
             });
             availableTools = [];
             continue;
@@ -173,7 +175,7 @@ export class Agent {
               role: 'tool',
               tool_call_id: tc.id,
               name: tc.name,
-              content: `Error: You have already executed the tool "${tc.name}" with similar arguments. Do NOT call this tool again. Based on the previous tool results in your message history, please formulate and write your final text response to the user now.`
+              content: `CRITICAL ERROR: You just tried to execute the tool "${tc.name}" with the exact same failing arguments as before. Your action FAILED. You MUST explicitly tell the user that the action failed and ask for their help or clarification. DO NOT pretend the action succeeded.`
             });
             availableTools = [];
             continue;
@@ -194,6 +196,18 @@ export class Agent {
 
           try {
             const parsedArgs = JSON.parse(tc.arguments);
+            
+            // Check for HITL tool approval
+            if (tool.requiresApproval && !context.approvedToolCalls?.includes(tc.id)) {
+              this.state = 'Suspended';
+              return JSON.stringify({
+                __jarvis_permission_request: true,
+                toolCallId: tc.id,
+                toolName: tc.name,
+                args: parsedArgs
+              });
+            }
+
             const toolResult = await tool.execute(parsedArgs, context);
             
             this.messageHistory.push({
@@ -241,6 +255,43 @@ export class Agent {
     }
 
     return finalAnswer;
+  }
+
+  /**
+   * Resume agent execution after a tool has been approved by the user.
+   */
+  public async resumeWithApproval(toolCallId: string, toolName: string, args: any, context: ExecutionContext): Promise<string> {
+    const tool = this.tools.find(t => t.name === toolName);
+    if (!tool) throw new Error(`Tool ${toolName} not found.`);
+    
+    this.state = 'Executing';
+    
+    // Explicitly approve it in the context so executeLoop doesn't suspend it again
+    if (!context.approvedToolCalls) {
+      context.approvedToolCalls = [];
+    }
+    context.approvedToolCalls.push(toolCallId);
+    
+    try {
+      const toolResult = await tool.execute(args, context);
+      
+      this.messageHistory.push({
+        role: 'tool',
+        tool_call_id: toolCallId,
+        name: toolName,
+        content: JSON.stringify(toolResult)
+      });
+      
+      return await this.executeLoop('', context);
+    } catch (err: any) {
+      this.messageHistory.push({
+        role: 'tool',
+        tool_call_id: toolCallId,
+        name: toolName,
+        content: `Error running approved tool: ${err.message}`
+      });
+      return await this.executeLoop('', context);
+    }
   }
 
   /**

@@ -137,15 +137,66 @@ async function startLiveChat() {
       try {
         const { response, sessionActive } = await orchestrator.handleInput(userInput);
         
-        spinner.stop();
-        console.log(`\n\x1b[1mJARVIS:\x1b[0m ${response}\n`);
+        const processAgentResponse = async (agentResponse: string) => {
+          let isPermissionRequest = false;
+          let permissionData: any = null;
+
+          try {
+            if (agentResponse && agentResponse.trim().startsWith('{')) {
+              const data = JSON.parse(agentResponse);
+              if (data.__jarvis_permission_request) {
+                isPermissionRequest = true;
+                permissionData = data;
+              }
+            }
+          } catch (e: any) {
+            console.log(`[DEBUG] JSON parse failed in liveChat: ${e.message}`);
+            // Normal text
+          }
+
+          if (isPermissionRequest) {
+            if (spinner) spinner.stop();
+            console.log(`\n\x1b[33m[PERMISSION REQUIRED]\x1b[0m`);
+            console.log(`JARVIS wants to run the system tool: \x1b[1m${permissionData.toolName}\x1b[0m`);
+            console.log(`Arguments: \n${JSON.stringify(permissionData.args, null, 2)}\n`);
+            
+            rl.question(`Do you approve this action? [Y/n] `, async (answer) => {
+              if (answer.toLowerCase() === 'y' || answer.trim() === '') {
+                console.log(`\x1b[32mAction Approved.\x1b[0m`);
+                spinner = ora('JARVIS is executing...').start();
+                try {
+                  const jarvisAgent = (orchestrator as any).jarvisAgent;
+                  const resumedResponse = await jarvisAgent.resumeWithApproval(
+                    permissionData.toolCallId, 
+                    permissionData.toolName, 
+                    permissionData.args, 
+                    { orchestrator }
+                  );
+                  // Recursively process the resumed response
+                  await processAgentResponse(resumedResponse);
+                } catch (resumeErr: any) {
+                  if (spinner) spinner.stop();
+                  console.log(`\n\x1b[31mError during execution:\x1b[0m ${resumeErr.message}\n`);
+                  promptUser();
+                }
+              } else {
+                console.log(`\x1b[31mAction Rejected.\x1b[0m\n`);
+                promptUser();
+              }
+            });
+          } else {
+            if (spinner) spinner.stop();
+            console.log(`\n\x1b[1mJARVIS:\x1b[0m ${agentResponse}\n`);
+            promptUser();
+          }
+        };
+
+        await processAgentResponse(response);
       } catch (err: any) {
-        spinner.fail(`Error: ${err.message}`);
+        if (spinner) spinner.fail(`Error: ${err.message}`);
         console.log(`\n`);
+        promptUser();
       }
-      
-      spinner = null;
-      promptUser();
     });
   };
 
