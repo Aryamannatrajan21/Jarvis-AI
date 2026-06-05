@@ -466,24 +466,17 @@ export const makeWhatsAppCallTool: ToolDefinition = {
             -- Wait for search results
             delay 4
             
-            -- Guaranteed Geometric Clicks
-            -- We bypass UI elements completely and click the exact physical coordinates on screen.
-            set {w, h} to size of window 1
-            set {x, y} to position of window 1
+            -- Pure Keyboard Navigation for Multi-Select Lists
+            -- Down Arrow moves focus to the first search result
+            key code 125
+            delay 0.5
             
-            -- Step 1: Click the first search result to "select" them
-            -- Sidebar center is x + 150. First result is roughly y + 160.
-            set contactX to x + 150
-            set contactY to y + 160
-            click at {contactX, contactY}
+            -- Spacebar "checks" the multi-select checkbox for the contact
+            key code 49
+            delay 0.5
             
-            delay 1.5
-            
-            -- Step 2: Click the final "Call" button that appears at the bottom of the sidebar
-            -- Bottom of sidebar is y + h. Button is slightly above the bottom edge.
-            set buttonX to x + 150
-            set buttonY to y + h - 40
-            click at {buttonX, buttonY}
+            -- Return key triggers the primary window action (the "Call" button at the bottom)
+            key code 36
             
           end tell
         end tell
