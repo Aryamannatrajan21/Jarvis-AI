@@ -203,7 +203,7 @@ export const generateChartTool: ToolDefinition = {
       if (typeof args.chartConfig === 'object') {
         configObj = args.chartConfig;
       } else if (typeof args.chartConfig === 'string') {
-        let str = args.chartConfig.trim();
+        const str = args.chartConfig.trim();
         try {
           // First attempt strict JSON parse
           configObj = JSON.parse(str);

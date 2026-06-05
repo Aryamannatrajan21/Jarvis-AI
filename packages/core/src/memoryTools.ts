@@ -62,7 +62,7 @@ export const readMemoryTool: ToolDefinition = {
   execute: async (args: { topic: string }) => {
     try {
       const sanitizedTopic = args.topic.replace(/[^a-zA-Z0-9_-]/g, '_');
-      let filePath = path.join(MEMORY_DIR, `${sanitizedTopic}.md`);
+      const filePath = path.join(MEMORY_DIR, `${sanitizedTopic}.md`);
       
       if (!fs.existsSync(filePath)) {
         return `No memory found for topic: ${args.topic}`;
