@@ -452,22 +452,50 @@ export const makeWhatsAppCallTool: ToolDefinition = {
             delay 1
             
             -- Open New Call Window
-            if "${args.callType}" is "video" then
-              keystroke "v" using {command down, shift down}
-            else
-              keystroke "c" using {command down, shift down}
-            end if
+            keystroke "c" using {command down, shift down}
             delay 2.5
             
             -- Paste contact name into the call search bar
             set the clipboard to "${safeContact}"
             keystroke "v" using command down
+            
+            -- Wait for the contact search results to load
             delay 4
             
-            -- Select contact and initiate call
-            key code 125 -- Down arrow
-            delay 0.5
-            key code 36 -- Return key
+            -- Initiate Call using Accessibility UI Search in the New Call Window
+            set callTarget to "Voice call"
+            if "${args.callType}" is "video" then set callTarget to "Video call"
+            set altTarget to "Audio call"
+            
+            set btnClicked to false
+            try
+              -- The New Call window/sidebar is small, so entire contents is fast
+              set allElems to entire contents of window 1
+              repeat with elem in allElems
+                try
+                  if class of elem is button then
+                    set n to name of elem
+                    set d to description of elem
+                    if (n is not missing value and (n contains callTarget or n contains altTarget)) or (d is not missing value and (d contains callTarget or d contains altTarget)) then
+                      click elem
+                      set btnClicked to true
+                      exit repeat
+                    end if
+                  end if
+                end try
+              end repeat
+            end try
+            
+            -- Coordinate Fallback
+            if not btnClicked then
+               set {w, h} to size of window 1
+               set {x, y} to position of window 1
+               if "${args.callType}" is "video" then
+                 click at {x + w - 100, y + 150}
+               else
+                 click at {x + w - 60, y + 150}
+               end if
+            end if
           end tell
         end tell
       `;
