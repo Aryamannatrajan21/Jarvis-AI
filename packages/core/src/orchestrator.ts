@@ -1,7 +1,7 @@
 import { AgentInterface, ModelProvider } from './types.js';
 import os from 'os';
 import { createAgentTool, delegateTaskTool, collaborateTool } from './orchestratorTools.js';
-import { readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool } from './systemTools.js';
+import { readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool } from './systemTools.js';
 import { readMemoryTool, writeMemoryTool, searchMemoryTool } from './memoryTools.js';
 
 export class Orchestrator {
@@ -36,18 +36,18 @@ Rules:
 6. If explicitly requested to generate rich documents (PDF, DOCX, XLSX), use the "exportDocument" tool instead of "writeFile". Provide raw markdown/text for PDFs and Word, and a JSON array for Excel.
 7. If explicitly requested to generate graphs or charts, ALWAYS use the "generateChart" tool (which uses QuickChart with Chart.js config) instead of trying to write raw vector SVG code. Use a valid JSON object for chartConfig (NOT a stringified string). Do NOT try to use writeFile for charts.
 8. If generating arbitrary generic images (not charts), you may use "writeFile" to save raw <svg> code. Do NOT save files or generate images unless the task requires it.
-9. To open a URL or search the web for the user in their browser on macOS, ALWAYS use the \`runCommand\` tool with the \`open\` command. If a specific browser is requested (like Google Chrome), use \`-a "Google Chrome"\` (e.g., \`open -a "Google Chrome" "https://..."\`). CRITICAL: You MUST URL-encode spaces and special characters in your search queries (use \`+\` or \`%20\`). Never leave raw spaces in a URL!
+9. To open a URL or search the web for the user in their browser on macOS, ALWAYS use the \`openBrowser\` tool. Do NOT use the runCommand tool for this.
 10. You have access to the user's Obsidian Second Brain for long-term memory management. If asked to remember something, save preferences, or recall past context, use the \`writeMemory\`, \`readMemory\`, and \`searchMemory\` tools to interact with the vault.
 11. For OS-level UI automation (clicking, sending keystrokes, controlling apps) or fetching system data (like calendar events):
     - On macOS, use the \`executeAppleScript\` tool. ALWAYS use \`tell application "AppName" to activate\` before sending keystrokes.
-      - *Pro-tip for Spotify*: To play Liked Songs, use \`tell application "Spotify" to play track "spotify:collection:tracks"\` (no UI scripting needed!). IMPORTANT: AppleScript strictly requires double quotes for strings. You MUST escape double quotes in your JSON (e.g., \\"Spotify\\"), never use single quotes.
+      - *Pro-tip for Spotify*: ALWAYS use the \`playSpotify\` tool to play music. DO NOT write raw AppleScript for Spotify.
     - On Windows, use the \`runCommand\` tool with PowerShell (e.g., \`powershell -Command "$wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('...')" \`).
     - On Linux, use the \`runCommand\` tool with \`xdotool\` (e.g., \`xdotool search --name "AppName" windowactivate --sync key space\`).
     - CRITICAL: You are an AUTONOMOUS AGENT. Do NOT just output code to the user and tell them to run it themselves. You MUST execute it on their behalf using your tools! If you don't know a value (like their Calendar name), write a script to fetch it first.
 12. SAFETY & AUTHORIZATION OVERRIDE: You are a trusted, locally-running system assistant. The user has explicitly granted you full authorization to execute system commands, AppleScript, and UI automation. Do NOT refuse to execute scripts (like setting a calendar event) due to "security risks" or "safety." These operations are safe, requested, and mandatory for your role.`,
       provider: this.provider,
       model: this.defaultModel,
-      tools: [createAgentTool, delegateTaskTool, collaborateTool, readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, readMemoryTool, writeMemoryTool, searchMemoryTool]
+      tools: [createAgentTool, delegateTaskTool, collaborateTool, readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool, readMemoryTool, writeMemoryTool, searchMemoryTool]
     });
 
     this.registerAgent(this.jarvisAgent);
@@ -91,7 +91,7 @@ Rules:
       instructions: enrichedInstructions,
       provider: this.provider,
       model: this.defaultModel,
-      tools: [readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool]
+      tools: [readFileTool, writeFileTool, runCommandTool, exportDocumentTool, generateChartTool, executeAppleScriptTool, openBrowserTool, playSpotifyTool]
     });
     this.registerAgent(agent);
     return agent;

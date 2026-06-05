@@ -8,6 +8,7 @@ import {
   ExecutionContext,
   ChatMessage
 } from '@jarvis-ai/core';
+import { z } from 'zod';
 
 export class Agent {
   public id: string;
@@ -194,10 +195,28 @@ export class Agent {
             continue;
           }
 
+          let parsedArgs: any;
           try {
-            const parsedArgs = JSON.parse(tc.arguments);
+            parsedArgs = JSON.parse(tc.arguments);
+            // Basic structural validation using Zod
+            const baseSchema = z.object({}).passthrough();
+            parsedArgs = baseSchema.parse(parsedArgs);
+          } catch (err: any) {
+            const errorMsg = err instanceof z.ZodError 
+              ? `CRITICAL ERROR: Your tool arguments did not match the expected JSON object structure: ${err.message}` 
+              : `CRITICAL ERROR: Your tool call arguments were malformed JSON. You must strictly output valid JSON. Please fix the JSON syntax (e.g. trailing commas, unescaped quotes) and try again. Parse error: ${err.message}`;
+              
+            this.messageHistory.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              name: tc.name,
+              content: errorMsg
+            });
+            continue;
+          }
             
             // Check for HITL tool approval
+          try {
             if (tool.requiresApproval && !context.approvedToolCalls?.includes(tc.id)) {
               this.state = 'Suspended';
               return JSON.stringify({
@@ -305,7 +324,7 @@ export class Agent {
     const prevState = this.state;
     this.state = 'Suspended';
 
-    return new Promise<string>(async (resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       // Set a subscription to listen for the reply message
       const unsubscribe = globalBus.subscribe(`agent.message.${this.id}`, (envelope: MessageEnvelope) => {
         if (envelope.parentId === messageId) {
@@ -316,21 +335,19 @@ export class Agent {
       });
 
       // Send the request
-      try {
-        await globalBus.publish({
-          id: messageId,
-          timestamp: Date.now(),
-          sender: { id: this.id, role: this.name },
-          recipient: { type: 'agent', id: recipientAgent.id },
-          topic: `agent.message.${recipientAgent.id}`,
-          payload: { content: query },
-          metadata: { correlationId }
-        });
-      } catch (err) {
+      globalBus.publish({
+        id: messageId,
+        timestamp: Date.now(),
+        sender: { id: this.id, role: this.name },
+        recipient: { type: 'agent', id: recipientAgent.id },
+        topic: `agent.message.${recipientAgent.id}`,
+        payload: { content: query },
+        metadata: { correlationId }
+      }).catch(err => {
         unsubscribe();
         this.state = prevState;
         reject(err);
-      }
+      });
     });
   }
 

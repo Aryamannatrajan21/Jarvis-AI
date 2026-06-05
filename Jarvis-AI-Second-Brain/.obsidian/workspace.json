@@ -18,22 +18,6 @@
             }
           }
         ]
-      },
-      {
-        "id": "f4a0d43059308033",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "c2cde44966a06493",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
-            }
-          }
-        ]
       }
     ],
     "direction": "vertical"
@@ -197,8 +181,19 @@
   },
   "active": "4fb8e2b4adf14133",
   "lastOpenFiles": [
+    "Welcome.md",
     "System_Updates_UI_Automation.md",
-    "Untitled.canvas",
-    "Welcome.md"
+    "Automation/Spotify Intelligence.md",
+    "Automation/AppleScript.md",
+    "Automation/macOS UI Automation.md",
+    "Automation/Cross-Platform Automation.md",
+    "Features/Voice Interface.md",
+    "Architecture/Memory System.md",
+    "Architecture/Orchestrator.md",
+    "Index.md",
+    "Automation",
+    "Features",
+    "Architecture",
+    "Untitled.canvas"
   ]
 }

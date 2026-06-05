@@ -289,3 +289,67 @@ export const executeAppleScriptTool: ToolDefinition = {
     }
   }
 };
+
+export const openBrowserTool: ToolDefinition = {
+  name: 'openBrowser',
+  description: "Opens a URL or performs a web search in the user's browser. Automatically handles URL encoding for search queries.",
+  schema: {
+    type: 'object',
+    properties: {
+      queryOrUrl: { type: 'string', description: 'The URL to open, or the search query string.' },
+      browser: { type: 'string', description: 'Optional. Specific browser to use (e.g., "Google Chrome", "Safari").' }
+    },
+    required: ['queryOrUrl']
+  },
+  requiresApproval: true,
+  execute: async (args, context) => {
+    try {
+      let finalUrl = args.queryOrUrl;
+      if (!finalUrl.startsWith('http') && !finalUrl.includes('://')) {
+        finalUrl = `https://www.google.com/search?q=${encodeURIComponent(finalUrl)}`;
+      }
+      
+      let cmd = '';
+      if (os.platform() === 'darwin') {
+        cmd = args.browser ? `open -a "${args.browser}" "${finalUrl}"` : `open "${finalUrl}"`;
+      } else if (os.platform() === 'win32') {
+        cmd = `start "" "${finalUrl}"`;
+      } else {
+        cmd = `xdg-open "${finalUrl}"`;
+      }
+      
+      await execAsync(cmd, { timeout: 10000 });
+      return `Successfully opened ${finalUrl} in the browser.`;
+    } catch (err: any) {
+      throw new Error(`Failed to open browser: ${err.message}`);
+    }
+  }
+};
+
+export const playSpotifyTool: ToolDefinition = {
+  name: 'playSpotify',
+  description: "Instantly plays the user's Liked Songs or a specific track URI on Spotify (macOS only).",
+  schema: {
+    type: 'object',
+    properties: {
+      uri: { type: 'string', description: 'The Spotify URI to play. Defaults to "spotify:collection:tracks" (Liked Songs).' }
+    }
+  },
+  requiresApproval: true,
+  execute: async (args, context) => {
+    if (os.platform() !== 'darwin') {
+      throw new Error('This tool is currently only supported on macOS.');
+    }
+    const targetUri = args.uri || 'spotify:collection:tracks';
+    try {
+      const script = `tell application "Spotify" to play track "${targetUri}"`;
+      const tmpPath = path.join(os.tmpdir(), `spotify_script_${Date.now()}.scpt`);
+      await fs.promises.writeFile(tmpPath, script, 'utf8');
+      await execAsync(`osascript "${tmpPath}"`, { timeout: 10000 });
+      await fs.promises.unlink(tmpPath).catch(() => {});
+      return `Successfully played ${targetUri} on Spotify.`;
+    } catch (err: any) {
+      throw new Error(`Failed to control Spotify: ${err.message}. Make sure Spotify is open.`);
+    }
+  }
+};

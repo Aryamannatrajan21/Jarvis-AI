@@ -13,7 +13,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc -w"
+    "dev": "tsc -w",
+    "test": "jest",
+    "lint": "eslint \"src/**/*.ts\""
   },
   "dependencies": {
     "@jarvis-ai/core": "*",
