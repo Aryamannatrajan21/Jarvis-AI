@@ -423,4 +423,74 @@ export const sendWhatsAppMessageTool: ToolDefinition = {
   }
 };
 
+export const createCalendarEventTool: ToolDefinition = {
+  name: 'createCalendarEvent',
+  description: 'Natively creates a macOS Calendar event. Use this INSTEAD of executeAppleScript when the user asks to schedule a reminder or event in the Calendar app.',
+  schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'The title or summary of the event.' },
+      startDate: { type: 'string', description: 'ISO 8601 formatted start date and time.' },
+      endDate: { type: 'string', description: 'ISO 8601 formatted end date and time.' },
+      notes: { type: 'string', description: 'Optional notes or description for the event.' }
+    },
+    required: ['title', 'startDate', 'endDate']
+  },
+  requiresApproval: true,
+  execute: async (args, context) => {
+    if (os.platform() !== 'darwin') {
+      throw new Error('This tool is currently only supported on macOS.');
+    }
+    try {
+      const sDate = new Date(args.startDate);
+      const eDate = new Date(args.endDate);
+      
+      const safeTitle = args.title.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const safeNotes = (args.notes || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      
+      const script = `
+set sDate to current date
+set year of sDate to ${sDate.getFullYear()}
+set month of sDate to ${sDate.getMonth() + 1}
+set day of sDate to ${sDate.getDate()}
+set hours of sDate to ${sDate.getHours()}
+set minutes of sDate to ${sDate.getMinutes()}
+set seconds of sDate to ${sDate.getSeconds()}
+
+set eDate to current date
+set year of eDate to ${eDate.getFullYear()}
+set month of eDate to ${eDate.getMonth() + 1}
+set day of eDate to ${eDate.getDate()}
+set hours of eDate to ${eDate.getHours()}
+set minutes of eDate to ${eDate.getMinutes()}
+set seconds of eDate to ${eDate.getSeconds()}
+
+tell application "Calendar"
+  set targetCalendar to first calendar whose writable is true
+  tell targetCalendar
+    make new event with properties {summary:"${safeTitle}", start date:sDate, end date:eDate, description:"${safeNotes}"}
+  end tell
+end tell
+      `;
+      
+      const tmpPath = path.join(os.tmpdir(), `calendar_script_${Date.now()}.scpt`);
+      const fs = require('fs');
+      await fs.promises.writeFile(tmpPath, script, 'utf8');
+      const { exec } = require('child_process');
+      const util = require('util');
+      const execAsync = util.promisify(exec);
+      await execAsync(`osascript "${tmpPath}"`, { timeout: 10000 });
+      await fs.promises.unlink(tmpPath).catch(() => {});
+      
+      return `Successfully created calendar event "${args.title}".`;
+    } catch (err: any) {
+      if (err.message.includes('Not authorized to send Apple events')) {
+        throw new Error('AppleScript execution blocked by macOS Security. Please grant Terminal Calendar permissions.');
+      }
+      throw new Error(`Failed to create calendar event: ${err.message}`);
+    }
+  }
+};
+
+
 
