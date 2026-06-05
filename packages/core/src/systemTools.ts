@@ -391,7 +391,7 @@ export const sendWhatsAppMessageTool: ToolDefinition = {
             -- Paste contact name
             set the clipboard to "${safeContact}"
             keystroke "v" using command down
-            delay 2.5
+            delay 4
             
             -- Select contact
             key code 125 -- Down arrow
