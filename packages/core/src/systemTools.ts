@@ -451,94 +451,40 @@ export const makeWhatsAppCallTool: ToolDefinition = {
             set frontmost to true
             delay 1
             
-            -- Open New Chat
-            keystroke "n" using command down
+            -- Open New Call Window
+            if "${args.callType}" is "video" then
+              keystroke "v" using {command down, shift down}
+            else
+              keystroke "c" using {command down, shift down}
+            end if
             delay 2.5
             
             -- Paste contact name
             set the clipboard to "${safeContact}"
             keystroke "v" using command down
+            
+            -- Wait for search results
             delay 4
             
-            -- Select contact and open chat
-            key code 125 -- Down arrow
-            delay 0.5
-            key code 36 -- Return key
+            -- Guaranteed Geometric Clicks
+            -- We bypass UI elements completely and click the exact physical coordinates on screen.
+            set {w, h} to size of window 1
+            set {x, y} to position of window 1
             
-            -- Wait for the chat to fully load
-            delay 3
+            -- Step 1: Click the first search result to "select" them
+            -- Sidebar center is x + 150. First result is roughly y + 160.
+            set contactX to x + 150
+            set contactY to y + 160
+            click at {contactX, contactY}
             
-            set callTarget to "Voice call"
-            if "${args.callType}" is "video" then set callTarget to "Video call"
-            set altTarget to "Audio call"
+            delay 1.5
             
-            set btnClicked to false
+            -- Step 2: Click the final "Call" button that appears at the bottom of the sidebar
+            -- Bottom of sidebar is y + h. Button is slightly above the bottom edge.
+            set buttonX to x + 150
+            set buttonY to y + h - 40
+            click at {buttonX, buttonY}
             
-            -- Optimized Accessibility Search: Only check toolbars and top-level groups to avoid timing out on chat history
-            try
-              set tbButtons to buttons of toolbar 1 of window 1
-              repeat with b in tbButtons
-                 set n to name of b
-                 set d to description of b
-                 if (n is not missing value and (n contains callTarget or n contains altTarget)) or (d is not missing value and (d contains callTarget or d contains altTarget)) then
-                    click b
-                    set btnClicked to true
-                    exit repeat
-                 end if
-              end repeat
-            end try
-            
-            if not btnClicked then
-              try
-                set topGroups to groups of window 1
-                repeat with g in topGroups
-                   -- The header group is not a scroll area
-                   if class of g is not scroll area then
-                     set grpButtons to buttons of g
-                     repeat with b in grpButtons
-                       set n to name of b
-                       set d to description of b
-                       if (n is not missing value and (n contains callTarget or n contains altTarget)) or (d is not missing value and (d contains callTarget or d contains altTarget)) then
-                          click b
-                          set btnClicked to true
-                          exit repeat
-                       end if
-                     end repeat
-                   end if
-                   if btnClicked then exit repeat
-                end repeat
-              end try
-            end if
-            
-            if not btnClicked then
-               -- Attempt to search one more level deep in groups
-               try
-                 set topGroups to groups of window 1
-                 repeat with g in topGroups
-                    set subGroups to groups of g
-                    repeat with sg in subGroups
-                       if class of sg is not scroll area then
-                         set grpButtons to buttons of sg
-                         repeat with b in grpButtons
-                           set n to name of b
-                           set d to description of b
-                           if (n is not missing value and (n contains callTarget or n contains altTarget)) or (d is not missing value and (d contains callTarget or d contains altTarget)) then
-                              click b
-                              set btnClicked to true
-                              exit repeat
-                           end if
-                         end repeat
-                       end if
-                       if btnClicked then exit repeat
-                    end repeat
-                    if btnClicked then exit repeat
-                 end repeat
-               end try
-            end if
-            
-            if not btnClicked then
-              error "Could not find the call button in the chat header."
-            end if
           end tell
         end tell
       `;
