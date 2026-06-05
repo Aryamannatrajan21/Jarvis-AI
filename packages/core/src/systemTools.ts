@@ -422,3 +422,70 @@ export const sendWhatsAppMessageTool: ToolDefinition = {
     }
   }
 };
+
+export const makeWhatsAppCallTool: ToolDefinition = {
+  name: 'makeWhatsAppCall',
+  description: 'Natively opens WhatsApp and initiates an audio or video call to a specific contact. Use this INSTEAD of AppleScript whenever the user asks to call someone on WhatsApp.',
+  schema: {
+    type: 'object',
+    properties: {
+      contactName: { type: 'string', description: 'The name of the contact to call.' },
+      callType: { type: 'string', enum: ['audio', 'video'], description: 'The type of call to make.' }
+    },
+    required: ['contactName', 'callType']
+  },
+  requiresApproval: true,
+  execute: async (args, context) => {
+    if (os.platform() !== 'darwin') {
+      throw new Error('This tool is currently only supported on macOS.');
+    }
+    try {
+      const safeContact = args.contactName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      
+      // Determine the shortcut letter: 'a' for Audio, 'v' for Video
+      const shortcutKey = args.callType === 'video' ? 'v' : 'a';
+      
+      const script = `
+        tell application "WhatsApp" to activate
+        delay 1.5
+        
+        tell application "System Events"
+          tell process "WhatsApp"
+            set frontmost to true
+            delay 1
+            
+            -- Open New Chat
+            keystroke "n" using command down
+            delay 2.5
+            
+            -- Paste contact name
+            set the clipboard to "${safeContact}"
+            keystroke "v" using command down
+            delay 4
+            
+            -- Select contact
+            key code 125 -- Down arrow
+            delay 0.5
+            key code 36 -- Return key
+            delay 2.5
+            
+            -- Initiate Call (Cmd + Shift + A/V)
+            keystroke "${shortcutKey}" using {command down, shift down}
+          end tell
+        end tell
+      `;
+      
+      const tmpPath = path.join(os.tmpdir(), `whatsapp_call_script_${Date.now()}.scpt`);
+      await fs.promises.writeFile(tmpPath, script, 'utf8');
+      await execAsync(`osascript "${tmpPath}"`, { timeout: 15000 });
+      await fs.promises.unlink(tmpPath).catch(() => {});
+      
+      return `Successfully initiated WhatsApp ${args.callType} call to ${args.contactName}.`;
+    } catch (err: any) {
+      if (err.message.includes('Not authorized to send Apple events')) {
+        throw new Error('AppleScript execution blocked by macOS Security. Please grant Terminal Accessibility permissions.');
+      }
+      throw new Error(`Failed to initiate WhatsApp call: ${err.message}`);
+    }
+  }
+};
