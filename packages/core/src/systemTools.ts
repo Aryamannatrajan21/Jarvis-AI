@@ -469,8 +469,22 @@ export const makeWhatsAppCallTool: ToolDefinition = {
             key code 36 -- Return key
             delay 2.5
             
-            -- Initiate Call (Cmd + Shift + A/V)
-            keystroke "${shortcutKey}" using {command down, shift down}
+            -- Initiate Call
+            if "${args.callType}" is "video" then
+              try
+                click menu item "Video Call" of menu "Call" of menu bar 1
+              end try
+              delay 0.5
+              keystroke "v" using {command down, shift down}
+            else
+              try
+                click menu item "Voice Call" of menu "Call" of menu bar 1
+              end try
+              delay 0.5
+              keystroke "d" using {command down, shift down}
+              delay 0.5
+              keystroke "a" using {command down, shift down}
+            end if
           end tell
         end tell
       `;
